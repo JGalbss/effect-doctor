@@ -24,6 +24,8 @@ pub enum Category {
     Architecture,
     Performance,
     V4Migration,
+    /// `--deep` findings merged from @effect/language-service.
+    TypeAware,
 }
 
 impl Category {
@@ -34,6 +36,7 @@ impl Category {
             Category::Architecture => "Architecture",
             Category::Performance => "Performance",
             Category::V4Migration => "v4 Migration",
+            Category::TypeAware => "Type-aware",
         }
     }
 }

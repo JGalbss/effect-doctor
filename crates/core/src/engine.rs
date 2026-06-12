@@ -22,6 +22,8 @@ pub struct ScanOptions {
     pub scope: ScanScope,
     /// Diff base ref for changed/lines scopes (default: merge-base with main).
     pub base: Option<String>,
+    /// Merge type-aware diagnostics from @effect/language-service.
+    pub deep: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -164,6 +166,23 @@ pub fn scan(options: &ScanOptions) -> Result<ScanResult, String> {
         .into_iter()
         .flat_map(|outcome| outcome.diagnostics)
         .collect();
+    if options.deep {
+        let mut deep_diagnostics = crate::deep::run_language_service(&options.root)?;
+        if let Some(filter) = &scope_filter {
+            deep_diagnostics.retain(|diagnostic| {
+                let path = options.root.join(&diagnostic.file);
+                filter.includes_file(&path)
+                    && (!filter.lines_only || {
+                        filter
+                            .relative_path(&path)
+                            .is_some_and(|relative| {
+                                filter.diff.line_is_changed(&relative, diagnostic.line)
+                            })
+                    })
+            });
+        }
+        diagnostics.extend(deep_diagnostics);
+    }
     diagnostics.sort_by(|a, b| {
         (a.severity, a.rule, a.file.as_str(), a.line)
             .cmp(&(b.severity, b.rule, b.file.as_str(), b.line))
@@ -232,7 +251,7 @@ pub fn lint_source(display_path: &str, source: &str, v4_active: bool) -> Vec<Dia
 
 /// Test files keep their diagnostics in the report but (mostly) out of the
 /// score — deliberate rule-breaking is normal in tests.
-fn classify_file(path: &str) -> FileContext {
+pub(crate) fn classify_file(path: &str) -> FileContext {
     let lowered = path.to_ascii_lowercase();
     let is_test_path = lowered
         .split(['/', '\\'])

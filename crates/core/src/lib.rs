@@ -1,3 +1,4 @@
+mod deep;
 mod diagnostics;
 mod effect_imports;
 mod engine;

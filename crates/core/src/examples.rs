@@ -115,6 +115,26 @@ pub fn example_for(rule: &str) -> Option<RuleExample> {
             "return yield* Effect.fail(new NotFound({ id }))",
             "return yield* new NotFound({ id })",
         ),
+        "no-nested-gen-yield" => (
+            "Effect.gen(function* () {\n  const user = yield* Effect.gen(function* () {\n    return yield* repo.byId(id)\n  })\n})",
+            "Effect.gen(function* () {\n  const user = yield* repo.byId(id)\n})",
+        ),
+        "no-effect-fn-iife" => (
+            "yield* Effect.fn(function* () { ... })()",
+            "yield* Effect.gen(function* () { ... })",
+        ),
+        "no-unnecessary-pipe-chain" => (
+            "value.pipe(Effect.map(f)).pipe(Effect.flatMap(g))",
+            "value.pipe(Effect.map(f), Effect.flatMap(g))",
+        ),
+        "no-return-effect-in-gen" => (
+            "Effect.gen(function* () {\n  return Effect.succeed(1) // success value is an Effect!\n})",
+            "Effect.gen(function* () {\n  return yield* Effect.succeed(1)\n})",
+        ),
+        "redundant-schema-tag-identifier" => (
+            "class NotFound extends Schema.TaggedError<NotFound>(\"NotFound\")(\"NotFound\", {}) {}",
+            "class NotFound extends Schema.TaggedError<NotFound>()(\"NotFound\", {}) {}",
+        ),
         "no-effect-do-notation" => (
             "Effect.Do.pipe(\n  Effect.bind(\"user\", () => getUser(id)),\n  Effect.bind(\"posts\", ({ user }) => getPosts(user))\n)",
             "Effect.gen(function* () {\n  const user = yield* getUser(id)\n  const posts = yield* getPosts(user)\n  return { user, posts }\n})",

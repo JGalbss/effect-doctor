@@ -1,7 +1,7 @@
 use oxc_ast::ast::{
     ArrowFunctionExpression, BinaryExpression, CallExpression, Class, Function, ImportDeclaration,
-    NewExpression, StaticMemberExpression, SwitchStatement, TaggedTemplateExpression,
-    ThrowStatement, TryStatement, YieldExpression,
+    NewExpression, ReturnStatement, StaticMemberExpression, SwitchStatement,
+    TaggedTemplateExpression, ThrowStatement, TryStatement, YieldExpression,
 };
 use oxc_span::Span;
 
@@ -10,6 +10,7 @@ use crate::effect_imports::EffectImports;
 
 mod catch_idioms;
 mod composition_limits;
+mod gen_shape;
 mod concurrency_idioms;
 mod equality_idioms;
 mod error_modeling;
@@ -128,6 +129,7 @@ pub trait Rule: Sync {
     fn on_member(&self, _member: &StaticMemberExpression<'_>, _ctx: &mut FileCtx) {}
     fn on_binary(&self, _binary: &BinaryExpression<'_>, _ctx: &mut FileCtx) {}
     fn on_switch(&self, _switch_stmt: &SwitchStatement<'_>, _ctx: &mut FileCtx) {}
+    fn on_return(&self, _return_stmt: &ReturnStatement<'_>, _ctx: &mut FileCtx) {}
     fn on_yield(&self, _yield_expr: &YieldExpression<'_>, _ctx: &mut FileCtx) {}
     fn on_try(&self, _try_stmt: &TryStatement<'_>, _ctx: &mut FileCtx) {}
     fn on_throw(&self, _throw_stmt: &ThrowStatement<'_>, _ctx: &mut FileCtx) {}
@@ -161,6 +163,7 @@ pub static RULES: &[&(dyn Rule + Send + Sync)] = &[
     &literal_idioms::LiteralIdioms,
     &logging_security::LoggingSecurity,
     &composition_limits::CompositionLimits,
+    &gen_shape::GenShape,
     // idiomatic
     &no_unnecessary_gen::NoUnnecessaryGen,
     &no_unnecessary_fail::NoUnnecessaryFail,

@@ -1,5 +1,5 @@
 use oxc_ast::ast::{
-    Class, ClassElement, Expression, MethodDefinitionKind, TSType, TSTypeName,
+    CallExpression, Class, ClassElement, Expression, MethodDefinitionKind, TSType, TSTypeName,
 };
 
 use crate::diagnostics::{Category, RuleMeta, Severity};
@@ -27,32 +27,46 @@ fn is_schema_class_factory(prop: &str) -> bool {
     )
 }
 
-/// For `class X extends Schema.Class<Self>("X")({...})`, find the inner
-/// `Schema.<factory><Self>(...)` call and return the Self type name.
-fn schema_self_type_name<'a, 'b>(
+fn is_service_factory(module: &str, prop: &str) -> bool {
+    match module {
+        "Context" => matches!(prop, "Tag" | "Service" | "GenericTag" | "Reference"),
+        "Effect" => matches!(prop, "Tag" | "Service"),
+        _ => false,
+    }
+}
+
+/// For `class X extends Schema.Class<Self>("X")({...})` or
+/// `class X extends Context.Tag("X")<Self, Shape>()`, find the Self type
+/// argument anywhere in the heritage call chain once a known factory is seen.
+fn heritage_self_type_name<'a, 'b>(
     superclass: &'b Expression<'a>,
     ctx: &FileCtx,
 ) -> Option<(&'b str, oxc_span::Span)> {
+    let mut chain: Vec<&'b CallExpression<'a>> = Vec::new();
     let mut current = superclass;
-    loop {
-        let Expression::CallExpression(call) = current else {
-            return None;
-        };
-        if let Some(("Schema", prop)) = call_module_prop(call, &ctx.imports) {
-            if !is_schema_class_factory(prop) {
-                return None;
-            }
-            let type_arguments = call.type_arguments.as_ref()?;
-            let TSType::TSTypeReference(reference) = type_arguments.params.first()? else {
-                return None;
-            };
-            let TSTypeName::IdentifierReference(identifier) = &reference.type_name else {
-                return None;
-            };
-            return Some((identifier.name.as_str(), reference.span));
-        }
+    while let Expression::CallExpression(call) = current {
+        chain.push(call);
         current = &call.callee;
     }
+    let is_known_factory = chain.iter().any(|call| {
+        let Some((module, prop)) = call_module_prop(call, &ctx.imports) else {
+            return false;
+        };
+        (module == "Schema" && is_schema_class_factory(prop)) || is_service_factory(module, prop)
+    });
+    if !is_known_factory {
+        return None;
+    }
+    chain.iter().find_map(|call| {
+        let type_arguments = call.type_arguments.as_ref()?;
+        let TSType::TSTypeReference(reference) = type_arguments.params.first()? else {
+            return None;
+        };
+        let TSTypeName::IdentifierReference(identifier) = &reference.type_name else {
+            return None;
+        };
+        Some((identifier.name.as_str(), reference.span))
+    })
 }
 
 fn extends_schema_class(superclass: &Expression, ctx: &FileCtx) -> bool {
@@ -83,7 +97,7 @@ impl Rule for SchemaClassHygiene {
         let Some(class_name) = class.id.as_ref().map(|id| id.name.as_str()) else {
             return;
         };
-        if let Some((self_name, span)) = schema_self_type_name(superclass, ctx) {
+        if let Some((self_name, span)) = heritage_self_type_name(superclass, ctx) {
             if self_name != class_name {
                 ctx.report(
                     &SELF_MISMATCH,

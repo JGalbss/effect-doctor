@@ -62,6 +62,10 @@ struct Cli {
     /// Diff base ref for --scope changed/lines (default: merge-base with main)
     #[arg(long)]
     base: Option<String>,
+
+    /// Also run the type-aware tier (@effect/language-service) and merge it
+    #[arg(long)]
+    deep: bool,
 }
 
 #[derive(Subcommand)]
@@ -176,6 +180,7 @@ fn main() -> ExitCode {
         migrate: cli.migrate,
         scope: cli.scope.into(),
         base: cli.base.clone(),
+        deep: cli.deep,
     }) {
         Ok(result) => result,
         Err(message) => {
