@@ -72,7 +72,13 @@ jobs:
           registry-url: https://registry.npmjs.org
       - name: Publish platform package
         shell: bash
-        run: cd npm-staging/${{ matrix.npm }} && npm publish --access public
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if npm view "${{ matrix.npm }}@$VERSION" version > /dev/null 2>&1; then
+            echo "${{ matrix.npm }}@$VERSION already published — skipping"
+          else
+            cd npm-staging/${{ matrix.npm }} && npm publish --access public
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -99,6 +105,12 @@ jobs:
             fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n')
           "
       - name: Publish effect-doctor
-        run: cd npm/effect-doctor && npm publish --access public
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if npm view "effect-doctor@$VERSION" version > /dev/null 2>&1; then
+            echo "effect-doctor@$VERSION already published — skipping"
+          else
+            cd npm/effect-doctor && npm publish --access public
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
