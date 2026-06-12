@@ -14,3 +14,5 @@ effect_doctor_core.workspace = true
 serde_json.workspace = true
 clap = { version = "4", features = ["derive"] }
 anstyle = "1"
+lsp-server = "0.7"
+lsp-types = "=0.94.1"

@@ -68,6 +68,8 @@ struct Cli {
     deep: bool,
 }
 
+mod lsp;
+
 #[derive(Subcommand)]
 enum Command {
     /// Show what a rule means and how to rewrite the code cleanly
@@ -81,6 +83,8 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Run as a language server over stdio (editor diagnostics)
+    Lsp,
 }
 
 fn run_explain(rule_id: &str) -> ExitCode {
@@ -173,6 +177,13 @@ fn main() -> ExitCode {
     match &cli.command {
         Some(Command::Explain { rule }) => return run_explain(rule),
         Some(Command::Rules { json }) => return run_rules(*json),
+        Some(Command::Lsp) => {
+            if let Err(error) = lsp::run() {
+                eprintln!("effect-doctor lsp: {error}");
+                return ExitCode::from(2);
+            }
+            return ExitCode::SUCCESS;
+        }
         None => {}
     }
     let result = match scan(&ScanOptions {
@@ -293,6 +304,7 @@ fn render(result: &ScanResult, verbose: bool, max_locations: usize) {
         p.reset
     );
     println!();
+    render_category_breakdown(p, result);
 
     // Group by rule, order groups by (severity, count desc).
     let mut groups: BTreeMap<&str, Vec<&Diagnostic>> = BTreeMap::new();
@@ -377,6 +389,27 @@ fn effect_profile_label(result: &ScanResult) -> String {
         return format!(", effect v{major}, v4 rules on");
     }
     format!(", effect v{major}")
+}
+
+fn render_category_breakdown(p: &Palette, result: &ScanResult) {
+    if result.diagnostics.is_empty() {
+        return;
+    }
+    let mut counts: Vec<(&str, usize)> = Vec::new();
+    for diagnostic in &result.diagnostics {
+        let label = diagnostic.category.label();
+        match counts.iter_mut().find(|(name, _)| *name == label) {
+            Some((_, count)) => *count += 1,
+            None => counts.push((label, 1)),
+        }
+    }
+    counts.sort_by_key(|(_, count)| std::cmp::Reverse(*count));
+    let parts: Vec<String> = counts
+        .iter()
+        .map(|(label, count)| format!("{label} {count}"))
+        .collect();
+    println!("  {}{}{}", p.dim, parts.join(" · "), p.reset);
+    println!();
 }
 
 fn test_marker(p: &Palette, diagnostic: &Diagnostic) -> String {

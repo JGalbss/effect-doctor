@@ -1,0 +1,14 @@
+{
+  "name": "effect-doctor-site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "gen": "cd .. && cargo run -q -p effect-doctor -- rules --json > site/src/data/rules.json"
+  },
+  "dependencies": {
+    "astro": "^5"
+  }
+}

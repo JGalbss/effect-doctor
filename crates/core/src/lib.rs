@@ -11,7 +11,7 @@ mod score;
 mod walk;
 
 pub use diagnostics::{Category, Diagnostic, FileContext, RuleMeta, Severity};
-pub use engine::{lint_source, scan, ScanOptions, ScanResult};
+pub use engine::{detect_effect_major, lint_source, scan, ScanOptions, ScanResult};
 pub use examples::{example_for, RuleExample};
 pub use git_scope::ScanScope;
 pub use rules::{all_metas, RULES};

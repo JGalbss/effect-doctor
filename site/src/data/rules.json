@@ -1,0 +1,650 @@
+[
+  {
+    "bad": "const user = yield getUser(id)",
+    "category": "Correctness",
+    "good": "const user = yield* getUser(id)",
+    "help": "Inside Effect.gen, effects must be yielded with `yield*`. A plain `yield` hands the raw Effect to the iterator protocol and the result type is wrong.",
+    "id": "require-yield-star",
+    "severity": "error"
+  },
+  {
+    "bad": "Effect.gen(function* () {\n  try {\n    return yield* fetchUser(id)\n  } catch (e) {\n    return null\n  }\n})",
+    "category": "Correctness",
+    "good": "fetchUser(id).pipe(\n  Effect.catchTag(\"UserNotFound\", () => Effect.succeed(null))\n)",
+    "help": "Effect failures do not throw — they flow through the typed error channel, so the catch block is dead code for them. Handle failures with Effect.catchTag / Effect.catch.",
+    "id": "no-try-catch-in-gen",
+    "severity": "error"
+  },
+  {
+    "bad": "Effect.gen(function* () {\n  const fiber = yield* Effect.fork(poller)\n  try {\n    return yield* job\n  } finally {\n    yield* Fiber.interrupt(fiber)\n  }\n})",
+    "category": "Correctness",
+    "good": "job.pipe(Effect.ensuring(Fiber.interrupt(fiber)))\n// or: Effect.race(job, poller) / Effect.acquireRelease",
+    "help": "try/finally around yields is not interruption-safe — the finalizer can be skipped if the fiber is interrupted. Use Effect.ensuring, Effect.acquireRelease, or Effect.race.",
+    "id": "no-try-finally-in-gen",
+    "severity": "warn"
+  },
+  {
+    "bad": "Effect.gen(function* () {\n  if (!valid) throw new Error(\"invalid input\")\n})",
+    "category": "Correctness",
+    "good": "Effect.gen(function* () {\n  if (!valid) return yield* new InvalidInput({ input })\n})",
+    "help": "A throw inside Effect code becomes an untyped defect, invisible to the error channel. Fail with a tagged error instead: `yield* Effect.fail(new MyError({...}))`.",
+    "id": "no-throw-in-effect",
+    "severity": "error"
+  },
+  {
+    "bad": "Effect.gen(function* () {\n  const result = Effect.runSync(computeThing())\n})",
+    "category": "Correctness",
+    "good": "Effect.gen(function* () {\n  const result = yield* computeThing()\n})",
+    "help": "Running an Effect inside another Effect creates a detached runtime: context, interruption, and tracing are lost. Compose with `yield*` instead, and run only at the program edge.",
+    "id": "no-run-inside-effect",
+    "severity": "error"
+  },
+  {
+    "bad": "class Wrong extends Schema.Class<Account>(\"Wrong\")({ id: Schema.String }) {}",
+    "category": "Correctness",
+    "good": "class Wrong extends Schema.Class<Wrong>(\"Wrong\")({ id: Schema.String }) {}",
+    "help": "The Self type parameter of Schema.Class/TaggedClass/TaggedError must be the declaring class itself, or every static helper is typed against the wrong class.",
+    "id": "schema-class-self-mismatch",
+    "severity": "error"
+  },
+  {
+    "bad": "class User extends Schema.Class<User>(\"User\")({ id: Schema.String }) {\n  constructor() { super({ id: \"0\" }) }\n}",
+    "category": "Correctness",
+    "good": "class User extends Schema.Class<User>(\"User\")({ id: Schema.String }) {\n  static empty = () => User.make({ id: \"0\" })\n}",
+    "help": "Schema classes control construction for decoding — overriding the constructor breaks decode. Use a static make/factory or field transformations instead.",
+    "id": "no-constructor-override-in-schema-class",
+    "severity": "error"
+  },
+  {
+    "bad": "Effect.map(user, async (u) => await enrich(u))",
+    "category": "Correctness",
+    "good": "Effect.flatMap(user, (u) => Effect.tryPromise(() => enrich(u)))",
+    "help": "An async callback returns a Promise the Effect runtime never awaits — the work dangles or the value becomes Effect<Promise<T>>. Use Effect.tryPromise / Effect.promise for async work.",
+    "id": "no-async-callback-in-effect-combinators",
+    "severity": "error"
+  },
+  {
+    "bad": "Effect.sync(() => {\n  fetchData().then((d) => use(d))\n})",
+    "category": "Correctness",
+    "good": "Effect.tryPromise(() => fetchData()).pipe(Effect.map(use))",
+    "help": "Promise chains inside Effect.sync escape the runtime — no error channel, no interruption. Use Effect.tryPromise and compose with Effect.map/flatMap.",
+    "id": "no-then-in-sync",
+    "severity": "warn"
+  },
+  {
+    "bad": "Effect.tryPromise(() => Promise.all(ids.map(fetchUser)))",
+    "category": "Correctness",
+    "good": "Effect.forEach(ids, (id) => Effect.tryPromise(() => fetchUser(id)), {\n  concurrency: 5,\n})",
+    "help": "Promise.all inside an Effect wrapper bypasses concurrency limits, interruption, and structured concurrency. Use Effect.forEach(items, fn, { concurrency: N }) or Effect.all.",
+    "id": "no-promise-all-in-effect",
+    "severity": "warn"
+  },
+  {
+    "bad": "Effect.tryPromise(() => fetch(url)) // UnknownException",
+    "category": "Idiomatic",
+    "good": "Effect.tryPromise({\n  try: () => fetch(url),\n  catch: (cause) => new FetchError({ cause }),\n})",
+    "help": "Bare Effect.try/tryPromise puts UnknownException in the error channel. The { try, catch } form maps the failure to a typed domain error.",
+    "id": "require-typed-catch-in-try",
+    "severity": "info"
+  },
+  {
+    "bad": "Effect.runSync(Effect.promise(() => fetch(url)))",
+    "category": "Correctness",
+    "good": "await Effect.runPromise(Effect.promise(() => fetch(url)))",
+    "help": "Effect.runSync throws AsyncFiberException when the effect suspends (promise, sleep, async). Use Effect.runPromise for anything that can be asynchronous.",
+    "id": "no-runsync-on-async-effect",
+    "severity": "error"
+  },
+  {
+    "bad": "Effect.map(user, (u) => Effect.log(u.name)) // log never runs",
+    "category": "Correctness",
+    "good": "Effect.tap(user, (u) => Effect.log(u.name))",
+    "help": "map wraps the callback result as a plain value, so returning an Effect produces Effect<Effect<A>> — the inner effect silently never runs. Use flatMap (or tap for side effects).",
+    "id": "no-map-returning-effect",
+    "severity": "warn"
+  },
+  {
+    "bad": "Stream.forever(poll).pipe(Stream.runCollect)",
+    "category": "Correctness",
+    "good": "Stream.forever(poll).pipe(Stream.take(100), Stream.runCollect)\n// or Stream.runDrain when results are not needed",
+    "help": "Stream.runCollect buffers the whole stream — on an infinite source it runs until the process dies. Add Stream.take/takeUntil/timeout, or use Stream.runDrain.",
+    "id": "no-runcollect-on-infinite-stream",
+    "severity": "error"
+  },
+  {
+    "bad": "Stream.fromChunk(Chunk.fromIterable(bigIterable))",
+    "category": "Performance",
+    "good": "Stream.fromIterable(bigIterable)",
+    "help": "Stream.fromChunk(Chunk.fromIterable(x)) materializes the entire iterable up front. Stream.fromIterable(x) streams it lazily.",
+    "id": "no-eager-chunk-stream",
+    "severity": "info"
+  },
+  {
+    "bad": "stream.pipe(Stream.mapEffect(processItem))",
+    "category": "Performance",
+    "good": "stream.pipe(Stream.mapEffect(processItem, { concurrency: 4 }))",
+    "help": "Stream.mapEffect runs items one at a time unless you pass { concurrency }. For I/O per element that's usually a large slowdown — make the choice explicit.",
+    "id": "stream-mapeffect-missing-concurrency",
+    "severity": "info"
+  },
+  {
+    "bad": "const queue = yield* Queue.unbounded<Job>()",
+    "category": "Performance",
+    "good": "const queue = yield* Queue.bounded<Job>(100) // backpressure",
+    "help": "Unbounded queues have no backpressure — a fast producer grows the queue until OOM. Prefer Queue.bounded (or sliding/dropping) sized to the workload.",
+    "id": "prefer-queue-bounded",
+    "severity": "info"
+  },
+  {
+    "bad": "selected.includes({ id: 1, name: \"Paul\" }) // always false",
+    "category": "Correctness",
+    "good": "selected.some((u) => Equal.equals(u, Data.struct({ id: 1, name: \"Paul\" })))",
+    "help": "Comparing against a fresh object/array literal uses reference equality and is always false. Use Equal.equals with Data.struct/Data.array for structural equality.",
+    "id": "no-object-literal-comparison",
+    "severity": "warn"
+  },
+  {
+    "bad": "if (result._tag === \"Left\") { ... }",
+    "category": "Idiomatic",
+    "good": "if (Either.isLeft(result)) { ... }",
+    "help": "Reaching into `_tag` for built-in types bypasses the typed predicates. Use Option.isSome/isNone, Either.isLeft/isRight, Exit.isSuccess/isFailure.",
+    "id": "no-tag-string-comparison",
+    "severity": "warn"
+  },
+  {
+    "bad": "switch (event._tag) {\n  case \"OrderPlaced\": ...\n  case \"OrderShipped\": ...\n}",
+    "category": "Idiomatic",
+    "good": "Match.valueTags(event, {\n  OrderPlaced: (e) => ...,\n  OrderShipped: (e) => ...,\n}) // exhaustive",
+    "help": "switch on `_tag` is non-exhaustive by default. Match.valueTags / Effect.catchTags give exhaustive, declarative dispatch.",
+    "id": "prefer-match-over-tag-switch",
+    "severity": "info"
+  },
+  {
+    "bad": "Effect.fail(\"Something went wrong!\")",
+    "category": "Idiomatic",
+    "good": "class QueryError extends Data.TaggedError(\"QueryError\")<{ cause: unknown }> {}\nEffect.fail(new QueryError({ cause }))",
+    "help": "Failing with a string loses all type information — catchTag can't route it and call sites get `string` in the error channel. Use Data.TaggedError / Schema.TaggedErrorClass.",
+    "id": "no-string-errors",
+    "severity": "warn"
+  },
+  {
+    "bad": "getUser(id).pipe(Effect.catchAll(() => Effect.succeed(null)))",
+    "category": "Correctness",
+    "good": "getUser(id).pipe(\n  Effect.catchTag(\"UserNotFound\", () => Effect.succeed(null))\n)",
+    "help": "catchAll(() => succeed(null)) swallows every failure — including bugs — and turns them into a nullable success. Catch the specific tag, or use Effect.option if absence is the model.",
+    "id": "no-catchall-to-null",
+    "severity": "warn"
+  },
+  {
+    "bad": "Effect.all([fetchUser, fetchPosts]) // silently sequential",
+    "category": "Performance",
+    "good": "Effect.all([fetchUser, fetchPosts], { concurrency: \"unbounded\" })",
+    "help": "Effect.all / Effect.forEach run sequentially unless you pass { concurrency } — usually a surprise for code that looks parallel. Make the choice explicit.",
+    "id": "effect-all-missing-concurrency",
+    "severity": "info"
+  },
+  {
+    "bad": "Effect.race(fetchData, Effect.sleep(\"2 seconds\"))",
+    "category": "Idiomatic",
+    "good": "fetchData.pipe(Effect.timeout(\"2 seconds\"))",
+    "help": "Racing against Effect.sleep hand-rolls a deadline with worse semantics. Effect.timeout / timeoutTo / timeoutFail say it directly.",
+    "id": "prefer-timeout-over-race-sleep",
+    "severity": "warn"
+  },
+  {
+    "bad": "const fiber = yield* Effect.fork(task)\nconst result = yield* Fiber.join(fiber)",
+    "category": "Idiomatic",
+    "good": "const result = yield* task",
+    "help": "Forking and immediately joining is just running the effect, with extra fiber overhead. Yield the effect directly; fork only when work continues in the background.",
+    "id": "no-fork-then-immediate-join",
+    "severity": "warn"
+  },
+  {
+    "bad": "Effect.sleep(2000) // ms? s?",
+    "category": "Idiomatic",
+    "good": "Effect.sleep(\"2 seconds\")",
+    "help": "A bare number for time is ambiguous (ms? s?). Duration strings (\"2 seconds\") or Duration.seconds(2) eliminate the guesswork.",
+    "id": "prefer-duration-over-raw-millis",
+    "severity": "info"
+  },
+  {
+    "bad": "Effect.sync(() => 42)",
+    "category": "Idiomatic",
+    "good": "Effect.succeed(42)",
+    "help": "Effect.sync(() => literal) adds a pointless thunk — Effect.succeed(literal) is direct.",
+    "id": "prefer-succeed-over-sync-literal",
+    "severity": "info"
+  },
+  {
+    "bad": "const apiKey = Config.string(\"API_KEY\")",
+    "category": "Correctness",
+    "good": "const apiKey = Config.redacted(\"API_KEY\")",
+    "help": "Secrets loaded as plain Config.string leak into logs, errors, and serialized output. Config.redacted wraps them so they can't be printed accidentally.",
+    "id": "prefer-config-redacted",
+    "severity": "warn"
+  },
+  {
+    "bad": "Effect.log(`Results: ${JSON.stringify(results)}`)",
+    "category": "Idiomatic",
+    "good": "Effect.log(\"results computed\").pipe(Effect.annotateLogs({ results }))",
+    "help": "Interpolating JSON.stringify into a log message defeats structured logging. Log a stable message and attach data with Effect.annotateLogs.",
+    "id": "prefer-structured-logging-args",
+    "severity": "info"
+  },
+  {
+    "bad": "HttpServerResponse.text(JSON.stringify(user))",
+    "category": "Idiomatic",
+    "good": "HttpServerResponse.json(user)",
+    "help": "Manual JSON.stringify into a text response skips the content-type header clients rely on. HttpServerResponse.json(value) sets it correctly.",
+    "id": "prefer-json-response-helper",
+    "severity": "warn"
+  },
+  {
+    "bad": "step1().pipe(\n  Effect.flatMap(step2),\n  Effect.flatMap(step3),\n  Effect.flatMap(step4),\n  Effect.flatMap(step5)\n)",
+    "category": "Idiomatic",
+    "good": "Effect.gen(function* () {\n  const a = yield* step1()\n  const b = yield* step2(a)\n  const c = yield* step3(b)\n  return yield* step5(yield* step4(c))\n})",
+    "help": "Four or more flatMap/andThen steps in one pipe read like callback nesting. Effect.gen turns the same flow into sequential statements.",
+    "id": "avoid-long-combinator-chains",
+    "severity": "info"
+  },
+  {
+    "bad": "Layer.mergeAll(A, B, C, D, E, F, G, H, I, J, K, L)",
+    "category": "Architecture",
+    "good": "const CoreInfra = Layer.mergeAll(A, B, C)\nconst UserModule = Layer.mergeAll(D, E)\nLayer.mergeAll(CoreInfra, UserModule, ...)",
+    "help": "A flat mergeAll of the whole app is hard to navigate and reason about. Compose per-domain modules and merge those.",
+    "id": "no-layer-mergeall-megalist",
+    "severity": "info"
+  },
+  {
+    "bad": "Effect.gen(function* () {\n  const user = yield* Effect.gen(function* () {\n    return yield* repo.byId(id)\n  })\n})",
+    "category": "Idiomatic",
+    "good": "Effect.gen(function* () {\n  const user = yield* repo.byId(id)\n})",
+    "help": "`yield* Effect.gen(...)` directly inside another generator adds a wrapper for nothing — inline the inner generator's body into the parent.",
+    "id": "no-nested-gen-yield",
+    "severity": "info"
+  },
+  {
+    "bad": "yield* Effect.fn(function* () { ... })()",
+    "category": "Idiomatic",
+    "good": "yield* Effect.gen(function* () { ... })",
+    "help": "Effect.fn(...)() invoked immediately builds a traced function just to call it once — use Effect.gen directly (keep the span with Effect.withSpan).",
+    "id": "no-effect-fn-iife",
+    "severity": "warn"
+  },
+  {
+    "bad": "value.pipe(Effect.map(f)).pipe(Effect.flatMap(g))",
+    "category": "Idiomatic",
+    "good": "value.pipe(Effect.map(f), Effect.flatMap(g))",
+    "help": "Chained pipes (`x.pipe(a).pipe(b)` / `pipe(pipe(x, a), b)`) are one pipe — merge the steps.",
+    "id": "no-unnecessary-pipe-chain",
+    "severity": "info"
+  },
+  {
+    "bad": "Effect.gen(function* () {\n  return Effect.succeed(1) // success value is an Effect!\n})",
+    "category": "Idiomatic",
+    "good": "Effect.gen(function* () {\n  return yield* Effect.succeed(1)\n})",
+    "help": "Returning a bare Effect from Effect.gen makes the success value an Effect (Effect<Effect<A>>) — usually you want `return yield*` so it actually runs.",
+    "id": "no-return-effect-in-gen",
+    "severity": "info"
+  },
+  {
+    "bad": "class NotFound extends Schema.TaggedError<NotFound>(\"NotFound\")(\"NotFound\", {}) {}",
+    "category": "Idiomatic",
+    "good": "class NotFound extends Schema.TaggedError<NotFound>()(\"NotFound\", {}) {}",
+    "help": "The identifier argument defaults to the tag — repeating the same string is noise; drop it.",
+    "id": "redundant-schema-tag-identifier",
+    "severity": "info"
+  },
+  {
+    "bad": "Effect.gen(function* () {\n  return yield* fetchUser(id)\n})",
+    "category": "Idiomatic",
+    "good": "fetchUser(id)",
+    "help": "An Effect.gen whose body is just `return yield* effect` adds a generator allocation for nothing — use the effect expression directly.",
+    "id": "no-unnecessary-gen",
+    "severity": "info"
+  },
+  {
+    "bad": "return yield* Effect.fail(new NotFound({ id }))",
+    "category": "Idiomatic",
+    "good": "return yield* new NotFound({ id })",
+    "help": "Tagged errors are themselves yieldable: `return yield* new MyError({...})` — wrapping in Effect.fail is redundant.",
+    "id": "no-unnecessary-fail-of-yieldable",
+    "severity": "info"
+  },
+  {
+    "bad": "Effect.Do.pipe(\n  Effect.bind(\"user\", () => getUser(id)),\n  Effect.bind(\"posts\", ({ user }) => getPosts(user))\n)",
+    "category": "Idiomatic",
+    "good": "Effect.gen(function* () {\n  const user = yield* getUser(id)\n  const posts = yield* getPosts(user)\n  return { user, posts }\n})",
+    "help": "Do-notation pipelines (Effect.Do / bind / bindTo / let) read worse than the equivalent Effect.gen and lose stack quality.",
+    "id": "no-effect-do-notation",
+    "severity": "info"
+  },
+  {
+    "bad": "loadConfig.pipe(Effect.orDie)",
+    "category": "Correctness",
+    "good": "loadConfig.pipe(Effect.catchTag(\"ConfigError\", () => Effect.succeed(defaults)))",
+    "help": "orDie converts every failure into an unrecoverable defect. Fine when failure truly is impossible — but if the error is expected (config, validation, IO), handle it with catchTag instead.",
+    "id": "no-orDie-to-silence-errors",
+    "severity": "info"
+  },
+  {
+    "bad": "Effect.succeed(undefined)",
+    "category": "Idiomatic",
+    "good": "Effect.void",
+    "help": "`Effect.succeed(undefined)` allocates a new effect for a constant — `Effect.void` is the canonical shared instance.",
+    "id": "prefer-effect-void",
+    "severity": "info"
+  },
+  {
+    "bad": "effect.pipe(Effect.map(() => undefined))",
+    "category": "Idiomatic",
+    "good": "effect.pipe(Effect.asVoid)",
+    "help": "Mapping to a constant has dedicated combinators: `Effect.asVoid` for undefined, `Effect.as(value)` for constants — clearer intent, no closure.",
+    "id": "prefer-as-void",
+    "severity": "info"
+  },
+  {
+    "bad": "effect.pipe(Effect.map(toEffect), Effect.flatten)",
+    "category": "Idiomatic",
+    "good": "effect.pipe(Effect.flatMap(toEffect))",
+    "help": "`Effect.map` followed by `Effect.flatten` is exactly `Effect.flatMap`.",
+    "id": "prefer-flatmap-over-map-flatten",
+    "severity": "info"
+  },
+  {
+    "bad": "const value = effect.pipe()",
+    "category": "Idiomatic",
+    "good": "const value = effect",
+    "help": "`.pipe()` with no arguments does nothing — remove it.",
+    "id": "no-unnecessary-pipe",
+    "severity": "info"
+  },
+  {
+    "bad": "Effect.catchAll((e) =>\n  e._tag === \"NotFound\" ? Effect.succeed(0) : Effect.fail(e)\n)",
+    "category": "Idiomatic",
+    "good": "Effect.catchTag(\"NotFound\", () => Effect.succeed(0))",
+    "help": "Branching on `error._tag` inside a catch-all handler re-implements what `Effect.catchTag` / `Effect.catchTags` do with full type narrowing and exhaustiveness.",
+    "id": "prefer-catch-tag",
+    "severity": "warn"
+  },
+  {
+    "bad": "Effect.catchAll((e) => Effect.fail(new WrappedError({ cause: e })))",
+    "category": "Idiomatic",
+    "good": "Effect.mapError((e) => new WrappedError({ cause: e }))",
+    "help": "A catch handler that always fails again is just transforming the error — `Effect.mapError` says that directly.",
+    "id": "catch-to-map-error",
+    "severity": "info"
+  },
+  {
+    "bad": "Effect.gen(function* () {\n  const now = Date.now()\n})",
+    "category": "Idiomatic",
+    "good": "Effect.gen(function* () {\n  const now = yield* Clock.currentTimeMillis\n})",
+    "help": "Reading the wall clock directly makes Effect code untestable. Use `Clock.currentTimeMillis` / `DateTime.now` so TestClock can control time in tests.",
+    "id": "prefer-clock-service",
+    "severity": "warn"
+  },
+  {
+    "bad": "Effect.sync(() => Math.random())",
+    "category": "Idiomatic",
+    "good": "Random.next",
+    "help": "Direct randomness makes Effect code non-deterministic in tests. Use the `Random` service (`Random.next`, `Random.nextIntBetween`, ...) so tests can seed it.",
+    "id": "prefer-random-service",
+    "severity": "warn"
+  },
+  {
+    "bad": "Effect.gen(function* () {\n  console.log(\"user created\", user)\n})",
+    "category": "Idiomatic",
+    "good": "Effect.gen(function* () {\n  yield* Effect.logInfo(\"user created\").pipe(Effect.annotateLogs({ user }))\n})",
+    "help": "console.* bypasses Effect's structured, context-aware logging (levels, spans, annotations). Use Effect.log / Effect.logInfo / Effect.logError.",
+    "id": "prefer-effect-logging",
+    "severity": "warn"
+  },
+  {
+    "bad": "Effect.sync(() => setTimeout(poll, 5000))",
+    "category": "Idiomatic",
+    "good": "poll.pipe(Effect.delay(\"5 seconds\"), Effect.forever)",
+    "help": "Raw timers escape Effect's interruption and TestClock. Use Effect.sleep, Schedule, or Effect.repeat.",
+    "id": "prefer-effect-timers",
+    "severity": "warn"
+  },
+  {
+    "bad": "Effect.tryPromise(() => fetch(\"https://api.example.com/users\"))",
+    "category": "Idiomatic",
+    "good": "HttpClient.get(\"https://api.example.com/users\")\n// typed errors, tracing, interruption built in",
+    "help": "Global fetch has untyped errors and no tracing/interruption integration. Use HttpClient from effect (platform).",
+    "id": "prefer-platform-fetch",
+    "severity": "warn"
+  },
+  {
+    "bad": "Effect.gen(function* () {\n  const port = process.env.PORT\n})",
+    "category": "Idiomatic",
+    "good": "Effect.gen(function* () {\n  const port = yield* Config.integer(\"PORT\")\n})",
+    "help": "Direct process.env reads are untyped and unvalidated. The Config module gives typed, validated configuration with redaction support.",
+    "id": "prefer-config-module",
+    "severity": "warn"
+  },
+  {
+    "bad": "const data = JSON.parse(raw) // any, throws",
+    "category": "Idiomatic",
+    "good": "const data = yield* decodeUser(raw) // Schema.fromJsonString(User)",
+    "help": "Raw JSON.parse returns `any` and throws. At data boundaries use Schema.fromJsonString / UnknownFromJsonString for typed, validated decoding.",
+    "id": "prefer-schema-over-json",
+    "severity": "info"
+  },
+  {
+    "bad": "const loadUser = (id: string) =>\n  Effect.gen(function* () {\n    return yield* repo.byId(id)\n  })",
+    "category": "Idiomatic",
+    "good": "const loadUser = Effect.fn(\"UserRepo.loadUser\")(function* (id: string) {\n  return yield* repo.byId(id)\n})",
+    "help": "A function whose body is one Effect.gen is exactly what Effect.fn is for — it adds a named span and proper stack frames for free: `Effect.fn(\"name\")(function* (args) {...})`.",
+    "id": "prefer-effect-fn",
+    "severity": "warn"
+  },
+  {
+    "bad": "class HttpError extends Error {}",
+    "category": "Idiomatic",
+    "good": "class HttpError extends Schema.TaggedErrorClass<HttpError>()(\"HttpError\", {\n  status: Schema.Number,\n}) {}",
+    "help": "Plain Error subclasses have no _tag, so Effect.catchTag cannot route them and they serialize poorly. Use Data.TaggedError or Schema.TaggedErrorClass.",
+    "id": "prefer-tagged-error-classes",
+    "severity": "warn"
+  },
+  {
+    "bad": "Effect.gen(function* () {\n  const user = Schema.decodeUnknownSync(User)(input) // throws\n})",
+    "category": "Idiomatic",
+    "good": "Effect.gen(function* () {\n  const user = yield* decodeUser(input) // Schema.decodeUnknownEffect(User)\n})",
+    "help": "Sync decoding throws inside Effect code, bypassing the typed error channel. Use Schema.decodeUnknownEffect so failures land in the error channel as SchemaError.",
+    "id": "prefer-decode-effect",
+    "severity": "warn"
+  },
+  {
+    "bad": "const parse = (u: unknown) => Schema.decodeUnknownEffect(User)(u)",
+    "category": "Performance",
+    "good": "const decodeUser = Schema.decodeUnknownEffect(User)\nconst parse = (u: unknown) => decodeUser(u)",
+    "help": "Schema.decode*/encode* compiles a codec — building it on every call is wasted work. Hoist `const decode = Schema.decodeUnknownEffect(MySchema)` to module scope.",
+    "id": "hoist-schema-codecs",
+    "severity": "info"
+  },
+  {
+    "bad": "Effect.fn(\"run\")(function* () { ... })",
+    "category": "Idiomatic",
+    "good": "Effect.fn(\"OrderService.placeOrder\")(function* () { ... })",
+    "help": "Span names end up in traces and dashboards — name the business operation (\"UserRepo.create\"), not the mechanism.",
+    "id": "meaningful-span-names",
+    "severity": "info"
+  },
+  {
+    "bad": "import { readFileSync } from \"node:fs\"",
+    "category": "Idiomatic",
+    "good": "import { FileSystem } from \"@effect/platform\"\n// const fs = yield* FileSystem.FileSystem; yield* fs.readFileString(path)",
+    "help": "Effect's platform services (FileSystem, Path, Command) wrap these with typed errors, interruption, and test layers.",
+    "id": "prefer-node-effect-counterparts",
+    "severity": "info"
+  },
+  {
+    "bad": "it(\"creates a user\", () => Effect.runPromise(program))",
+    "category": "Idiomatic",
+    "good": "it.effect(\"creates a user\", () => program)",
+    "help": "@effect/vitest's it.effect runs the test inside a managed runtime (TestClock, proper failure rendering) — no manual runPromise or async glue.",
+    "id": "prefer-it-effect",
+    "severity": "warn"
+  },
+  {
+    "bad": "program.pipe(Effect.provide(DbLayer), Effect.provide(LogLayer))",
+    "category": "Architecture",
+    "good": "program.pipe(Effect.provide(Layer.mergeAll(DbLayer, LogLayer)))",
+    "help": "Multiple Effect.provide calls in one pipe build layers independently (v3 even double-builds shared ones). Compose layers first (Layer.provide / Layer.mergeAll), then provide once.",
+    "id": "no-chained-provides",
+    "severity": "warn"
+  },
+  {
+    "bad": "yield* sql`BEGIN`\nyield* insertOrder\nyield* sql`COMMIT`",
+    "category": "Architecture",
+    "good": "yield* insertOrder.pipe(sql.withTransaction)",
+    "help": "Hand-written BEGIN/COMMIT/ROLLBACK loses automatic rollback on failure and interruption. Use sql.withTransaction.",
+    "id": "no-manual-sql-transactions",
+    "severity": "warn"
+  },
+  {
+    "bad": "fetchData.pipe(Effect.retry(Schedule.exponential(\"100 millis\")))",
+    "category": "Architecture",
+    "good": "fetchData.pipe(Effect.retry({\n  schedule: Schedule.exponential(\"100 millis\"),\n  while: (e) => e._tag === \"TransientError\",\n}))",
+    "help": "Retrying every failure indiscriminately retries validation errors, 404s, and bugs. Add `while`/`until` (or catchTag routing) so only transient failures are retried.",
+    "id": "retry-only-retryable",
+    "severity": "info"
+  },
+  {
+    "bad": "Schedule.exponential(\"100 millis\")",
+    "category": "Performance",
+    "good": "Schedule.exponential(\"100 millis\").pipe(Schedule.jittered)",
+    "help": "Exponential backoff without jitter synchronizes retries across clients (thundering herd). Add `Schedule.jittered`.",
+    "id": "add-jitter-to-backoff",
+    "severity": "info"
+  },
+  {
+    "bad": "Schedule.exponential(\"100 millis\")",
+    "category": "Performance",
+    "good": "Schedule.exponential(\"100 millis\").pipe(\n  Schedule.either(Schedule.spaced(\"10 seconds\"))\n)",
+    "help": "Uncapped exponential backoff grows without bound. Union with a spaced schedule (`Schedule.either(Schedule.spaced(...))`) to cap the delay.",
+    "id": "cap-exponential-backoff",
+    "severity": "info"
+  },
+  {
+    "bad": "Effect.forEach(users, notify, { concurrency: \"unbounded\" })",
+    "category": "Performance",
+    "good": "Effect.forEach(users, notify, { concurrency: 10 })",
+    "help": "`concurrency: \"unbounded\"` over a large collection spawns a fiber per element with no backpressure. Prefer a bounded number sized to the resource.",
+    "id": "no-unbounded-concurrency",
+    "severity": "info"
+  },
+  {
+    "bad": "Effect.gen(function* (_) {\n  const user = yield* _(getUser(id))\n})",
+    "category": "v4 Migration",
+    "good": "Effect.gen(function* () {\n  const user = yield* getUser(id)\n})",
+    "help": "The `_` adapter parameter (`Effect.gen(function*(_) { yield* _(op) })`) is deprecated and removed in v4 — yield effects directly with `yield* op`.",
+    "id": "v4-no-gen-adapter",
+    "severity": "warn"
+  },
+  {
+    "bad": "effect.pipe(Effect.catchAll(handle))",
+    "category": "v4 Migration",
+    "good": "effect.pipe(Effect.catch(handle))",
+    "help": "v4 renamed the catch family: catchAll→catch, catchAllCause→catchCause, catchAllDefect→catchDefect, catchSome→catchFilter, catchSomeCause→catchCauseFilter; catchSomeDefect was removed.",
+    "id": "v4-catch-renames",
+    "severity": "error"
+  },
+  {
+    "bad": "yield* Effect.fork(task)",
+    "category": "v4 Migration",
+    "good": "yield* Effect.forkChild(task)",
+    "help": "v4 renamed forking: fork→forkChild, forkDaemon→forkDetach; forkAll and forkWithErrorHandler were removed.",
+    "id": "v4-fork-renames",
+    "severity": "error"
+  },
+  {
+    "bad": "class Db extends Context.Tag(\"Db\")<Db, Shape>() {}",
+    "category": "v4 Migration",
+    "good": "class Db extends Context.Service<Db, Shape>()(\"Db\") {}",
+    "help": "v4 consolidates service definition: Context.Tag / Context.GenericTag / Effect.Tag / Effect.Service all become `class X extends Context.Service<X, Shape>()(\"X\") {}`.",
+    "id": "v4-context-service",
+    "severity": "error"
+  },
+  {
+    "bad": "Cause.isFailType(cause)",
+    "category": "v4 Migration",
+    "good": "Cause.isFailReason(reason) // Cause is a flat reasons array in v4",
+    "help": "v4 flattens Cause to a reasons array: isFailType→isFailReason, isFailure→hasFails, isDie→hasDies, isInterrupted→hasInterrupts, failureOption→findErrorOption, dieOption→findDefect, sequential/parallel→combine, *Exception→*Error.",
+    "id": "v4-cause-flattened",
+    "severity": "error"
+  },
+  {
+    "bad": "const runtime = yield* Effect.runtime<R>()",
+    "category": "v4 Migration",
+    "good": "const services = yield* Effect.context<R>()\n// run with Effect.runForkWith(services)",
+    "help": "v4 removed Runtime<R> and Effect.runtime — use Effect.context<R>() plus Effect.runForkWith(services).",
+    "id": "v4-runtime-removed",
+    "severity": "error"
+  },
+  {
+    "bad": "Scope.extend(effect, scope)",
+    "category": "v4 Migration",
+    "good": "Scope.provide(effect, scope)",
+    "help": "v4 renamed Scope.extend to Scope.provide.",
+    "id": "v4-scope-provide",
+    "severity": "error"
+  },
+  {
+    "bad": "Layer.scoped(Tag, acquire)",
+    "category": "v4 Migration",
+    "good": "Layer.effect(Tag, acquire) // v4 Layer.effect handles scoping",
+    "help": "v4's Layer.effect handles scoping/finalization itself — Layer.scoped is gone; use Layer.effect.",
+    "id": "v4-layer-scoped-to-effect",
+    "severity": "error"
+  },
+  {
+    "bad": "Effect.gen(this, function* () { ... })",
+    "category": "v4 Migration",
+    "good": "Effect.gen({ self: this }, function* () { ... })",
+    "help": "v4 changed the self-binding form: Effect.gen(this, function*(){}) becomes Effect.gen({ self: this }, function*(){}).",
+    "id": "v4-gen-self-options",
+    "severity": "error"
+  },
+  {
+    "bad": "Option.fromNullable(value)",
+    "category": "v4 Migration",
+    "good": "Option.fromNullishOr(value)",
+    "help": "v4 renamed Option.fromNullable to Option.fromNullishOr.",
+    "id": "v4-option-renames",
+    "severity": "error"
+  },
+  {
+    "bad": "Schema.Union(A, B)\nSchema.Literal(\"a\", \"b\")\nSchema.TaggedError",
+    "category": "v4 Migration",
+    "good": "Schema.Union([A, B])\nSchema.Literals([\"a\", \"b\"])\nSchema.TaggedErrorClass",
+    "help": "v4 reworked Schema's API surface — see the effect-smol MIGRATION.md Schema table for the full mapping.",
+    "id": "v4-schema-renames",
+    "severity": "error"
+  },
+  {
+    "bad": "import { FiberRef } from \"effect\"",
+    "category": "v4 Migration",
+    "good": "import { Context } from \"effect\"\n// Context.Reference for ambient config with defaults",
+    "help": "v4 removed FiberRef/FiberRefs/Differ — use Context.Reference (ambient config with defaults) or References.* / Effect.provideService.",
+    "id": "v4-fiberref-removed",
+    "severity": "error"
+  },
+  {
+    "bad": "import { HttpClient } from \"@effect/platform\"",
+    "category": "v4 Migration",
+    "good": "import { HttpClient } from \"effect/unstable/http\"",
+    "help": "v4 merged these packages into effect itself: @effect/platform → effect (and effect/unstable/http), @effect/rpc → effect/unstable/rpc, @effect/cluster → effect/unstable/cluster.",
+    "id": "v4-package-consolidation",
+    "severity": "error"
+  },
+  {
+    "bad": "import { HttpApi } from \"effect/unstable/httpapi\"",
+    "category": "v4 Migration",
+    "good": "// fine to use — unstable APIs may change in minor releases; pin exactly",
+    "help": "effect/unstable/* APIs may break in minor releases — fine to use, worth tracking.",
+    "id": "v4-unstable-import-awareness",
+    "severity": "info"
+  }
+]

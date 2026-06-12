@@ -8,7 +8,7 @@ use std::process::Command;
 
 use serde::Deserialize;
 
-use crate::diagnostics::{Category, Diagnostic, FileContext, Severity};
+use crate::diagnostics::{Category, Diagnostic, Severity};
 
 #[derive(Deserialize)]
 struct LsReport {

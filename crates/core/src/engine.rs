@@ -104,7 +104,7 @@ fn build_scope_filter(options: &ScanOptions) -> Result<Option<ScopeFilter>, Stri
 /// Effect major version from the nearest package.json ("effect" in
 /// dependencies/devDependencies/peerDependencies), checking the scan root
 /// first and then one level of common workspace directories.
-fn detect_effect_major(root: &Path) -> Option<u32> {
+pub fn detect_effect_major(root: &Path) -> Option<u32> {
     if let Some(major) = package_effect_major(&root.join("package.json")) {
         return Some(major);
     }

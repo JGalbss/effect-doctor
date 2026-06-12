@@ -26,7 +26,15 @@ effect-doctor --scope lines --base main  # only issues on lines you touched
 effect-doctor rules                      # list all 76 rules
 effect-doctor explain no-map-returning-effect   # why + how to rewrite it
 effect-doctor rules --json               # full catalog with rewrite recipes
+effect-doctor --deep                     # merge type-aware @effect/language-service findings
+effect-doctor lsp                        # run as a language server (editor diagnostics)
 ```
+
+## Docs site
+
+`site/` is an Astro site rendering the full rule catalog with side-by-side bad→good
+rewrites, search, and category filters. `npm run gen` regenerates its data from
+`effect-doctor rules --json`; `npm run dev` to work on it locally.
 
 ## Status
 
@@ -49,9 +57,13 @@ is in [docs/RULES.md](docs/RULES.md); architecture and roadmap in
   never affect the score.
 - Diff scoping: `--scope changed` (files) / `--scope lines` vs `--base` (defaults to the
   merge-base with main) — untracked files count as fully changed.
-- Planned: suppression comments, config file, LSP server + editor extensions,
-  interactive docs site (from `rules --json`), `--deep` type-aware tier via
-  `@effect/tsgo`, agent handoff, npm distribution as per-platform binaries.
+- `--deep` tier: merges the ~78 type-aware diagnostics from
+  `@effect/language-service` (its headless `diagnostics --format json` CLI) as `ls/*`
+  rules — we never reimplement type analysis.
+- `effect-doctor lsp`: stdio language server publishing the syntactic rule set as
+  editor diagnostics (full-sync; rule id as the diagnostic code).
+- Planned: suppression comments, config file, editor extension packaging, agent
+  handoff, npm distribution as per-platform binaries.
 
 ## Development
 
