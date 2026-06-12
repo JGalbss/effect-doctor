@@ -55,6 +55,11 @@ fn try_catch_property<'a, 'b>(call: &'b CallExpression<'a>) -> Option<&'b Expres
 pub struct ErrorModeling;
 
 impl Rule for ErrorModeling {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&NO_STRING_ERRORS, &NO_CATCHALL_TO_NULL];
+        METAS
+    }
+
     fn on_call(&self, call: &CallExpression<'_>, ctx: &mut FileCtx) {
         let Some(("Effect", prop)) = call_module_prop(call, &ctx.imports) else {
             return;

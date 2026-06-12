@@ -10,6 +10,7 @@ use serde::Serialize;
 
 use crate::diagnostics::{Diagnostic, FileContext, RawDiagnostic};
 use crate::effect_imports::EffectImports;
+use crate::git_scope::{collect_diff, resolve_base, DiffInfo, ScanScope};
 use crate::runner::Runner;
 use crate::score::{compute_score, ScoreReport};
 use crate::walk::collect_files;
@@ -18,6 +19,9 @@ pub struct ScanOptions {
     pub root: PathBuf,
     /// Run v4-migration rules even when the codebase targets effect v3.
     pub migrate: bool,
+    pub scope: ScanScope,
+    /// Diff base ref for changed/lines scopes (default: merge-base with main).
+    pub base: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -26,9 +30,73 @@ pub struct ScanResult {
     pub effect_files: usize,
     pub effect_major: Option<u32>,
     pub v4_rules_active: bool,
+    pub scope: &'static str,
+    pub changed_files: Option<usize>,
     pub diagnostics: Vec<Diagnostic>,
     pub duration_ms: u64,
     pub score: ScoreReport,
+}
+
+fn scope_label(scope: ScanScope) -> &'static str {
+    match scope {
+        ScanScope::Full => "full",
+        ScanScope::ChangedFiles => "changed",
+        ScanScope::ChangedLines => "lines",
+    }
+}
+
+struct ScopeFilter {
+    toplevel: PathBuf,
+    diff: DiffInfo,
+    lines_only: bool,
+}
+
+impl ScopeFilter {
+    fn relative_path(&self, path: &Path) -> Option<String> {
+        let canonical = path.canonicalize().ok()?;
+        let relative = canonical.strip_prefix(&self.toplevel).ok()?;
+        Some(relative.to_string_lossy().into_owned())
+    }
+
+    fn includes_file(&self, path: &Path) -> bool {
+        self.relative_path(path)
+            .is_some_and(|relative| self.diff.contains_file(&relative))
+    }
+
+    fn retain_diagnostics(&self, path: &Path, diagnostics: &mut Vec<Diagnostic>) {
+        if !self.lines_only {
+            return;
+        }
+        let Some(relative) = self.relative_path(path) else {
+            diagnostics.clear();
+            return;
+        };
+        diagnostics.retain(|diagnostic| self.diff.line_is_changed(&relative, diagnostic.line));
+    }
+}
+
+fn build_scope_filter(options: &ScanOptions) -> Result<Option<ScopeFilter>, String> {
+    if options.scope == ScanScope::Full {
+        return Ok(None);
+    }
+    let toplevel_raw = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&options.root)
+        .args(["rev-parse", "--show-toplevel"])
+        .output()
+        .map_err(|error| format!("failed to run git: {error}"))?;
+    if !toplevel_raw.status.success() {
+        return Err("not a git repository — --scope changed/lines needs git".to_string());
+    }
+    let toplevel = PathBuf::from(String::from_utf8_lossy(&toplevel_raw.stdout).trim());
+    let base = resolve_base(&options.root, options.base.as_deref())?;
+    let lines_only = options.scope == ScanScope::ChangedLines;
+    let diff = collect_diff(&options.root, &base, lines_only)?;
+    Ok(Some(ScopeFilter {
+        toplevel,
+        diff,
+        lines_only,
+    }))
 }
 
 /// Effect major version from the nearest package.json ("effect" in
@@ -71,14 +139,24 @@ fn parse_major(version: &str) -> Option<u32> {
     digits.parse().ok()
 }
 
-pub fn scan(options: &ScanOptions) -> ScanResult {
+pub fn scan(options: &ScanOptions) -> Result<ScanResult, String> {
     let started = Instant::now();
     let effect_major = detect_effect_major(&options.root);
     let v4_active = effect_major == Some(4) || options.migrate;
-    let files = collect_files(&options.root);
+    let scope_filter = build_scope_filter(options)?;
+    let mut files = collect_files(&options.root);
+    if let Some(filter) = &scope_filter {
+        files.retain(|path| filter.includes_file(path));
+    }
     let outcomes: Vec<FileOutcome> = files
         .par_iter()
-        .filter_map(|path| process_file(&options.root, path, v4_active))
+        .filter_map(|path| {
+            let mut outcome = process_file(&options.root, path, v4_active)?;
+            if let Some(filter) = &scope_filter {
+                filter.retain_diagnostics(path, &mut outcome.diagnostics);
+            }
+            Some(outcome)
+        })
         .collect();
 
     let effect_files = outcomes.iter().filter(|outcome| outcome.has_effect).count();
@@ -92,15 +170,19 @@ pub fn scan(options: &ScanOptions) -> ScanResult {
     });
 
     let score = compute_score(&diagnostics);
-    ScanResult {
+    Ok(ScanResult {
         files_scanned: files.len(),
         effect_files,
         effect_major,
         v4_rules_active: v4_active,
+        scope: scope_label(options.scope),
+        changed_files: scope_filter
+            .as_ref()
+            .map(|filter| filter.diff.files.len()),
         diagnostics,
         duration_ms: started.elapsed().as_millis() as u64,
         score,
-    }
+    })
 }
 
 struct FileOutcome {

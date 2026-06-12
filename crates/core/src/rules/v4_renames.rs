@@ -147,6 +147,11 @@ impl V4Renames {
 }
 
 impl Rule for V4Renames {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&CATCH_RENAMES, &FORK_RENAMES, &CONTEXT_SERVICE, &CAUSE_FLATTENED, &RUNTIME_REMOVED, &SCOPE_PROVIDE, &LAYER_SCOPED, &GEN_SELF, &OPTION_RENAMES, &SCHEMA_RENAMES];
+        METAS
+    }
+
     fn on_member(&self, member: &StaticMemberExpression<'_>, ctx: &mut FileCtx) {
         if !ctx.v4_active() {
             return;

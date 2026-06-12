@@ -18,6 +18,11 @@ fn is_or_die_module(module: &str) -> bool {
 pub struct NoOrDie;
 
 impl Rule for NoOrDie {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&META];
+        METAS
+    }
+
     fn on_member(&self, member: &StaticMemberExpression<'_>, ctx: &mut FileCtx) {
         let Some((module, "orDie")) = member_module_prop(member, &ctx.imports) else {
             return;

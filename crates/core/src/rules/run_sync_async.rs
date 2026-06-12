@@ -21,6 +21,11 @@ fn is_async_constructor(prop: &str) -> bool {
 pub struct NoRunSyncOnAsync;
 
 impl Rule for NoRunSyncOnAsync {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&META];
+        METAS
+    }
+
     fn on_call(&self, call: &CallExpression<'_>, ctx: &mut FileCtx) {
         let Some(("Effect", "runSync" | "runSyncExit")) = call_module_prop(call, &ctx.imports)
         else {

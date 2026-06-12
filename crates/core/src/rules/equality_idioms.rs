@@ -72,6 +72,11 @@ fn string_value<'a>(expr: &'a Expression) -> Option<&'a str> {
 pub struct EqualityIdioms;
 
 impl Rule for EqualityIdioms {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&OBJECT_LITERAL_COMPARISON, &TAG_STRING_COMPARISON, &TAG_SWITCH];
+        METAS
+    }
+
     fn on_binary(&self, binary: &BinaryExpression<'_>, ctx: &mut FileCtx) {
         if !is_equality(binary.operator) {
             return;

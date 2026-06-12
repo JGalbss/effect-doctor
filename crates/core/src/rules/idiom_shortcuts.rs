@@ -169,6 +169,11 @@ impl IdiomShortcuts {
 }
 
 impl Rule for IdiomShortcuts {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&PREFER_EFFECT_VOID, &PREFER_AS_VOID, &PREFER_FLATMAP, &NO_UNNECESSARY_PIPE];
+        METAS
+    }
+
     fn on_call(&self, call: &CallExpression<'_>, ctx: &mut FileCtx) {
         self.check_succeed_undefined(call, ctx);
         self.check_map_to_constant(call, ctx);

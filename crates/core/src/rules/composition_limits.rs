@@ -24,6 +24,11 @@ const MERGEALL_THRESHOLD: usize = 10;
 pub struct CompositionLimits;
 
 impl Rule for CompositionLimits {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&LONG_CHAINS, &MERGEALL_MEGALIST];
+        METAS
+    }
+
     fn on_call(&self, call: &CallExpression<'_>, ctx: &mut FileCtx) {
         if let Some(("Layer", "mergeAll")) = call_module_prop(call, &ctx.imports) {
             if call.arguments.len() > MERGEALL_THRESHOLD {

@@ -214,6 +214,11 @@ impl ConcurrencyIdioms {
 }
 
 impl Rule for ConcurrencyIdioms {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&MISSING_CONCURRENCY, &RACE_SLEEP, &FORK_JOIN];
+        METAS
+    }
+
     fn on_call(&self, call: &CallExpression<'_>, ctx: &mut FileCtx) {
         self.check_missing_concurrency(call, ctx);
         self.check_race_sleep(call, ctx);

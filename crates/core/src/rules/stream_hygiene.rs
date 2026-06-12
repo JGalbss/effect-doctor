@@ -174,6 +174,11 @@ impl StreamHygiene {
 }
 
 impl Rule for StreamHygiene {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&INFINITE_RUNCOLLECT, &EAGER_CHUNK, &MAPEFFECT_CONCURRENCY, &QUEUE_BOUNDED];
+        METAS
+    }
+
     fn on_call(&self, call: &CallExpression<'_>, ctx: &mut FileCtx) {
         self.check_infinite_collect(call, ctx);
         self.check_eager_chunk(call, ctx);

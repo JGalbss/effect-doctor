@@ -32,6 +32,11 @@ fn is_codec_factory(prop: &str) -> bool {
 pub struct SchemaUsage;
 
 impl Rule for SchemaUsage {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&PREFER_DECODE_EFFECT, &HOIST_SCHEMA_CODECS];
+        METAS
+    }
+
     fn on_call(&self, call: &CallExpression<'_>, ctx: &mut FileCtx) {
         if let Some(("Schema", prop)) = call_module_prop(call, &ctx.imports) {
             if is_sync_decode(prop) && ctx.in_effect_code() {

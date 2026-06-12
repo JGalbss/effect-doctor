@@ -14,6 +14,11 @@ static META: RuleMeta = RuleMeta {
 pub struct NoChainedProvides;
 
 impl Rule for NoChainedProvides {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&META];
+        METAS
+    }
+
     fn on_call(&self, call: &CallExpression<'_>, ctx: &mut FileCtx) {
         let Some((_, "pipe")) = static_member(&call.callee) else {
             return;

@@ -119,6 +119,10 @@ impl FileCtx {
 /// node kind to every rule; rules must be cheap per-node. A rule may own
 /// several rule ids (several `RuleMeta`s) when the checks share matching.
 pub trait Rule: Sync {
+    /// Every rule id this implementation owns — powers `rules`/`explain`
+    /// listings and the docs-site export.
+    fn metas(&self) -> &'static [&'static RuleMeta];
+
     fn on_call(&self, _call: &CallExpression<'_>, _ctx: &mut FileCtx) {}
     fn on_new(&self, _new: &NewExpression<'_>, _ctx: &mut FileCtx) {}
     fn on_member(&self, _member: &StaticMemberExpression<'_>, _ctx: &mut FileCtx) {}
@@ -133,6 +137,11 @@ pub trait Rule: Sync {
     fn on_function(&self, _function: &Function<'_>, _ctx: &mut FileCtx) {}
     fn on_arrow(&self, _arrow: &ArrowFunctionExpression<'_>, _ctx: &mut FileCtx) {}
     fn on_file_end(&self, _ctx: &mut FileCtx) {}
+}
+
+/// All rule metadata across the registry, for listings and export.
+pub fn all_metas() -> Vec<&'static RuleMeta> {
+    RULES.iter().flat_map(|rule| rule.metas().iter().copied()).collect()
 }
 
 pub static RULES: &[&(dyn Rule + Send + Sync)] = &[

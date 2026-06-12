@@ -14,6 +14,11 @@ static META: RuleMeta = RuleMeta {
 pub struct NoEffectDo;
 
 impl Rule for NoEffectDo {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&META];
+        METAS
+    }
+
     fn on_member(&self, member: &StaticMemberExpression<'_>, ctx: &mut FileCtx) {
         let Some(("Effect", "Do")) = member_module_prop(member, &ctx.imports) else {
             return;

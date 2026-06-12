@@ -14,6 +14,11 @@ static META: RuleMeta = RuleMeta {
 pub struct PreferTaggedErrorClasses;
 
 impl Rule for PreferTaggedErrorClasses {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&META];
+        METAS
+    }
+
     fn on_class(&self, class: &Class<'_>, ctx: &mut FileCtx) {
         let Some(superclass) = &class.super_class else {
             return;

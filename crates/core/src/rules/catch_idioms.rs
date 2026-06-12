@@ -73,6 +73,11 @@ fn handler_always_fails(handler: &Expression, ctx: &FileCtx) -> bool {
 pub struct CatchIdioms;
 
 impl Rule for CatchIdioms {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&PREFER_CATCH_TAG, &CATCH_TO_MAP_ERROR];
+        METAS
+    }
+
     fn on_call(&self, call: &CallExpression<'_>, ctx: &mut FileCtx) {
         let Some(("Effect", prop)) = call_module_prop(call, &ctx.imports) else {
             return;

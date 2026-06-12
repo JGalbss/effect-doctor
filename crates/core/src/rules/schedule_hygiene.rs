@@ -25,6 +25,11 @@ fn is_cap_combinator(prop: &str) -> bool {
 pub struct ScheduleHygiene;
 
 impl Rule for ScheduleHygiene {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&ADD_JITTER, &CAP_BACKOFF];
+        METAS
+    }
+
     fn on_member(&self, member: &StaticMemberExpression<'_>, ctx: &mut FileCtx) {
         let Some(("Schedule", prop)) = member_module_prop(member, &ctx.imports) else {
             return;

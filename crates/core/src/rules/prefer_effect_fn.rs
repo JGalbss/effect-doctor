@@ -24,6 +24,11 @@ impl PreferEffectFn {
 }
 
 impl Rule for PreferEffectFn {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&META];
+        METAS
+    }
+
     fn on_arrow(&self, arrow: &ArrowFunctionExpression<'_>, ctx: &mut FileCtx) {
         // Zero-param arrows are usually thunks (Effect.suspend, Layer factories).
         if arrow.params.items.is_empty() {

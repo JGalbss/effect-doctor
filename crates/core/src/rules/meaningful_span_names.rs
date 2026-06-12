@@ -27,6 +27,11 @@ fn is_span_factory(prop: &str) -> bool {
 pub struct MeaningfulSpanNames;
 
 impl Rule for MeaningfulSpanNames {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&META];
+        METAS
+    }
+
     fn on_call(&self, call: &CallExpression<'_>, ctx: &mut FileCtx) {
         let Some(("Effect", prop)) = call_module_prop(call, &ctx.imports) else {
             return;

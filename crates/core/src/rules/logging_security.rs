@@ -118,6 +118,11 @@ impl LoggingSecurity {
 }
 
 impl Rule for LoggingSecurity {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&CONFIG_REDACTED, &STRUCTURED_LOGGING, &JSON_RESPONSE];
+        METAS
+    }
+
     fn on_call(&self, call: &CallExpression<'_>, ctx: &mut FileCtx) {
         self.check_config_secret(call, ctx);
         self.check_structured_logging(call, ctx);

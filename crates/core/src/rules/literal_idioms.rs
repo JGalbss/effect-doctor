@@ -107,6 +107,11 @@ impl LiteralIdioms {
 }
 
 impl Rule for LiteralIdioms {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&RAW_MILLIS, &SYNC_LITERAL];
+        METAS
+    }
+
     fn on_call(&self, call: &CallExpression<'_>, ctx: &mut FileCtx) {
         self.check_duration(call, ctx);
         self.check_sync_literal(call, ctx);

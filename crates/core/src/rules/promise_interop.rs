@@ -120,6 +120,11 @@ fn options_try_handler<'a, 'b>(call: &'b CallExpression<'a>) -> Option<&'b Expre
 pub struct PromiseInterop;
 
 impl Rule for PromiseInterop {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&NO_ASYNC_CALLBACK, &NO_THEN_IN_SYNC, &NO_PROMISE_ALL, &REQUIRE_TYPED_CATCH];
+        METAS
+    }
+
     fn on_call(&self, call: &CallExpression<'_>, ctx: &mut FileCtx) {
         let Some((module, prop)) = call_module_prop(call, &ctx.imports) else {
             return;

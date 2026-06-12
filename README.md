@@ -19,19 +19,24 @@ anti-patterns with file locations. Written in Rust on the [oxc](https://oxc.rs) 
 
 ```sh
 cargo build --release
-./target/release/effect-doctor <dir>        # scan
-./target/release/effect-doctor <dir> --verbose
-./target/release/effect-doctor <dir> --json
+effect-doctor <dir>                      # scan everything
+effect-doctor <dir> --verbose --json     # full report / machine-readable
+effect-doctor --scope changed            # only files changed vs main (PR mode)
+effect-doctor --scope lines --base main  # only issues on lines you touched
+effect-doctor rules                      # list all 76 rules
+effect-doctor explain no-map-returning-effect   # why + how to rewrite it
+effect-doctor rules --json               # full catalog with rewrite recipes
 ```
 
 ## Status
 
-Early but real: **59 rules live** across correctness, idiomatic, architecture,
-performance, and v4-migration categories, with 117 integration tests covering every rule
-(bad patterns fire, clean code stays silent). Rule sources: the Effect-TS skills repo,
-the @effect/language-service diagnostic catalog, the effect-smol v4 MIGRATION guide, and
-the EffectPatterns community corpus (304 patterns). The full spec is in
-[docs/RULES.md](docs/RULES.md); architecture and roadmap in
+Early but real: **76 rules live** across correctness, idiomatic, architecture,
+performance, and v4-migration categories — every rule ships with a bad→good rewrite
+recipe (`explain`), and 120+ integration tests cover the catalog (bad patterns fire,
+clean code stays silent; example coverage is test-enforced). Rule sources: the Effect-TS
+skills repo, the @effect/language-service diagnostic catalog, the effect-smol v4
+MIGRATION guide, and the EffectPatterns community corpus (304 patterns). The full spec
+is in [docs/RULES.md](docs/RULES.md); architecture and roadmap in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 - Import-aware matching: `import { Effect as E } from "effect"` and
@@ -42,9 +47,11 @@ the EffectPatterns community corpus (304 patterns). The full spec is in
   but don't count toward the score (except test-specific rules).
 - Score model: penalty per distinct rule fired (errors 1.5, warnings 0.75), info rules
   never affect the score.
-- Planned: `--scope changed` CI deltas, suppression comments, config file,
-  `--deep` type-aware tier via `@effect/tsgo`, agent handoff, npm distribution as
-  per-platform binaries.
+- Diff scoping: `--scope changed` (files) / `--scope lines` vs `--base` (defaults to the
+  merge-base with main) — untracked files count as fully changed.
+- Planned: suppression comments, config file, LSP server + editor extensions,
+  interactive docs site (from `rules --json`), `--deep` type-aware tier via
+  `@effect/tsgo`, agent handoff, npm distribution as per-platform binaries.
 
 ## Development
 

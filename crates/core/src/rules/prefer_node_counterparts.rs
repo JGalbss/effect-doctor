@@ -23,6 +23,11 @@ fn platform_counterpart(source: &str) -> Option<&'static str> {
 pub struct PreferNodeCounterparts;
 
 impl Rule for PreferNodeCounterparts {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&META];
+        METAS
+    }
+
     fn on_import(&self, import: &ImportDeclaration<'_>, ctx: &mut FileCtx) {
         let Some(service) = platform_counterpart(import.source.value.as_str()) else {
             return;

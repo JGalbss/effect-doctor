@@ -35,6 +35,11 @@ fn body_runs_effect(body: &Expression, ctx: &FileCtx) -> bool {
 pub struct PreferItEffect;
 
 impl Rule for PreferItEffect {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&META];
+        METAS
+    }
+
     fn on_call(&self, call: &CallExpression<'_>, ctx: &mut FileCtx) {
         let Some(callee_name) = ident_name(&call.callee) else {
             return;

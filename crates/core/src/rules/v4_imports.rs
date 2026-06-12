@@ -51,6 +51,11 @@ fn imported_name<'b>(specifier: &'b ImportDeclarationSpecifier) -> Option<&'b st
 pub struct V4Imports;
 
 impl Rule for V4Imports {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&FIBERREF_REMOVED, &PACKAGE_CONSOLIDATION, &UNSTABLE_IMPORTS];
+        METAS
+    }
+
     fn on_import(&self, import: &ImportDeclaration<'_>, ctx: &mut FileCtx) {
         if !ctx.v4_active() {
             return;

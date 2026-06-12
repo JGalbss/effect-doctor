@@ -14,6 +14,11 @@ static META: RuleMeta = RuleMeta {
 pub struct NoUnnecessaryGen;
 
 impl Rule for NoUnnecessaryGen {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&META];
+        METAS
+    }
+
     fn on_call(&self, call: &CallExpression<'_>, ctx: &mut FileCtx) {
         let Some(generator) = direct_effect_gen(call, &ctx.imports) else {
             return;

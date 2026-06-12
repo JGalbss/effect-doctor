@@ -34,6 +34,11 @@ fn has_retry_filter(call: &CallExpression<'_>) -> bool {
 pub struct RetryOnlyRetryable;
 
 impl Rule for RetryOnlyRetryable {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&META];
+        METAS
+    }
+
     fn on_call(&self, call: &CallExpression<'_>, ctx: &mut FileCtx) {
         if call_module_prop(call, &ctx.imports) != Some(("Effect", "retry")) {
             return;

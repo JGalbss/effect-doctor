@@ -13,6 +13,11 @@ static META: RuleMeta = RuleMeta {
 pub struct NoThrowInEffect;
 
 impl Rule for NoThrowInEffect {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&META];
+        METAS
+    }
+
     fn on_throw(&self, throw_stmt: &ThrowStatement<'_>, ctx: &mut FileCtx) {
         if !ctx.in_effect_gen() {
             return;

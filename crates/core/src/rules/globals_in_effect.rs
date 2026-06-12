@@ -39,6 +39,11 @@ fn is_timer(name: &str) -> bool {
 pub struct GlobalsInEffect;
 
 impl Rule for GlobalsInEffect {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&PREFER_EFFECT_TIMERS, &PREFER_PLATFORM_FETCH, &PREFER_CONFIG_MODULE, &PREFER_SCHEMA_OVER_JSON];
+        METAS
+    }
+
     fn on_call(&self, call: &CallExpression<'_>, ctx: &mut FileCtx) {
         if !ctx.in_effect_code() {
             return;

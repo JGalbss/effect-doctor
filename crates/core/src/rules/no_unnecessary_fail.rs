@@ -14,6 +14,11 @@ static META: RuleMeta = RuleMeta {
 pub struct NoUnnecessaryFail;
 
 impl Rule for NoUnnecessaryFail {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&META];
+        METAS
+    }
+
     fn on_yield(&self, yield_expr: &YieldExpression<'_>, ctx: &mut FileCtx) {
         if !yield_expr.delegate || !ctx.in_effect_gen() {
             return;

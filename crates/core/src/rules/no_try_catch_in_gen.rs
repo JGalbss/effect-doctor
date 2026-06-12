@@ -21,6 +21,11 @@ static TRY_FINALLY: RuleMeta = RuleMeta {
 pub struct NoTryCatchInGen;
 
 impl Rule for NoTryCatchInGen {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&META, &TRY_FINALLY];
+        METAS
+    }
+
     fn on_try(&self, try_stmt: &TryStatement<'_>, ctx: &mut FileCtx) {
         if !ctx.in_effect_gen() {
             return;

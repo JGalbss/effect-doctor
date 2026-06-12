@@ -19,6 +19,11 @@ fn is_transaction_keyword(text: &str) -> bool {
 pub struct NoManualSqlTransactions;
 
 impl Rule for NoManualSqlTransactions {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&META];
+        METAS
+    }
+
     fn on_tagged_template(&self, template: &TaggedTemplateExpression<'_>, ctx: &mut FileCtx) {
         if ident_name(&template.tag) != Some("sql") {
             return;

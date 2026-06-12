@@ -13,6 +13,11 @@ static META: RuleMeta = RuleMeta {
 pub struct NoUnboundedConcurrency;
 
 impl Rule for NoUnboundedConcurrency {
+    fn metas(&self) -> &'static [&'static RuleMeta] {
+        static METAS: &[&RuleMeta] = &[&META];
+        METAS
+    }
+
     fn on_call(&self, call: &CallExpression<'_>, ctx: &mut FileCtx) {
         for argument in &call.arguments {
             let Some(Expression::ObjectExpression(object)) = argument.as_expression() else {
