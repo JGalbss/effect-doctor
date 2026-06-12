@@ -240,6 +240,22 @@
     "severity": "warn"
   },
   {
+    "bad": "Effect.tryPromise({\n  try: () => fetch(url),\n  catch: (cause) => new FetchError({ cause }),\n})",
+    "category": "Idiomatic",
+    "good": "Effect.tryPromise({\n  try: (signal) => fetch(url, { signal }), // interruption cancels the request\n  catch: (cause) => new FetchError({ cause }),\n})",
+    "help": "Promises can't be interrupted — but Effect hands tryPromise an AbortSignal. Pass it to signal-aware APIs (fetch, SDKs) so interruption actually cancels the work.",
+    "id": "prefer-abort-signal-passthrough",
+    "severity": "info"
+  },
+  {
+    "bad": "getUser(id).pipe(\n  Effect.flatMap((user) =>\n    getAccount(user).pipe(\n      Effect.flatMap((account) => createInvoice(user, account))\n    )\n  )\n)",
+    "category": "Idiomatic",
+    "good": "Effect.gen(function* () {\n  const user = yield* getUser(id)\n  const account = yield* getAccount(user)\n  return yield* createInvoice(user, account)\n})",
+    "help": "flatMap inside flatMap nests like callbacks. Effect.gen turns the same sequencing into flat, readable statements: const a = yield* ...; const b = yield* ...",
+    "id": "prefer-gen-over-nested-flatmap",
+    "severity": "info"
+  },
+  {
     "bad": "step1().pipe(\n  Effect.flatMap(step2),\n  Effect.flatMap(step3),\n  Effect.flatMap(step4),\n  Effect.flatMap(step5)\n)",
     "category": "Idiomatic",
     "good": "Effect.gen(function* () {\n  const a = yield* step1()\n  const b = yield* step2(a)\n  const c = yield* step3(b)\n  return yield* step5(yield* step4(c))\n})",

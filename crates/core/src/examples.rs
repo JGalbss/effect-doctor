@@ -338,6 +338,14 @@ pub fn example_for(rule: &str) -> Option<RuleExample> {
             "import { HttpApi } from \"effect/unstable/httpapi\"",
             "// fine to use — unstable APIs may change in minor releases; pin exactly",
         ),
+        "prefer-abort-signal-passthrough" => (
+            "Effect.tryPromise({\n  try: () => fetch(url),\n  catch: (cause) => new FetchError({ cause }),\n})",
+            "Effect.tryPromise({\n  try: (signal) => fetch(url, { signal }), // interruption cancels the request\n  catch: (cause) => new FetchError({ cause }),\n})",
+        ),
+        "prefer-gen-over-nested-flatmap" => (
+            "getUser(id).pipe(\n  Effect.flatMap((user) =>\n    getAccount(user).pipe(\n      Effect.flatMap((account) => createInvoice(user, account))\n    )\n  )\n)",
+            "Effect.gen(function* () {\n  const user = yield* getUser(id)\n  const account = yield* getAccount(user)\n  return yield* createInvoice(user, account)\n})",
+        ),
         // ─── adoption (experimental, --adopt) ───
         "adopt-async-function" => (
             "async function loadUser(id: string) {\n  const res = await fetch(`/users/${id}`)\n  return res.json()\n}",

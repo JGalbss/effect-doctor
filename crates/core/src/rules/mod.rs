@@ -10,6 +10,7 @@ use crate::effect_imports::EffectImports;
 
 mod adopt;
 mod catch_idioms;
+mod interruption;
 mod composition_limits;
 mod gen_shape;
 mod concurrency_idioms;
@@ -172,6 +173,7 @@ pub static RULES: &[&(dyn Rule + Send + Sync)] = &[
     &concurrency_idioms::ConcurrencyIdioms,
     &literal_idioms::LiteralIdioms,
     &logging_security::LoggingSecurity,
+    &interruption::Interruption,
     &composition_limits::CompositionLimits,
     &gen_shape::GenShape,
     // idiomatic

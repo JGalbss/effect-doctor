@@ -44,6 +44,48 @@ const counts = {
         </div>
       </header>
 
+      <section class="concepts">
+        <div class="concept wide">
+          <h3>Effects are instructions, not execution</h3>
+          <p>
+            Effect looks like promises with more steps — it's a different thing entirely.
+            Instead of eagerly performing work, effects emit <em>instructions</em> describing
+            what to do; the runtime drives them. That inversion is what buys you:
+          </p>
+          <div class="benefits">
+            <span>Structured Concurrency</span><span>Work Cancellation</span><span>Better Tests</span>
+            <span>Dependency Injection</span><span>Resource Cleanup</span><span>Retries</span><span>Composition</span>
+          </div>
+        </div>
+        <div class="concept">
+          <h3>The Effect type</h3>
+          <pre class="diagram">{`         ┌─── Produces a value
+         │       ┌─── Fails with
+         │       │      ┌─── Requires
+         ▼       ▼      ▼
+Effect<number, Error, never>`}</pre>
+          <p>
+            To run an effect, its requirements must become <code>never</code> — dependencies
+            are erased by <code>Effect.provide</code> / layers, and every possible error is in
+            the type. An error outside that list is a <em>defect</em>.
+          </p>
+        </div>
+        <div class="concept">
+          <h3><code>yield*</code> &amp; <code>pipe</code></h3>
+          <p>
+            <code>Effect.gen</code> uses plain JS generators: the runtime interprets each
+            yielded effect and resumes with the result — lazily, which is why Effect can stop
+            a function mid-run. <code>pipe</code> passes each result to the next function;
+            when pipes start nesting inside <code>flatMap</code>, switch to
+            <code>Effect.gen</code> (we lint for that).
+          </p>
+          <p class="links">
+            <a href="https://effect.website">effect.website</a> ·
+            <a href="https://effect-ts.github.io/effect/docs/effect">generated API docs</a>
+          </p>
+        </div>
+      </section>
+
       <nav class="filters">
         <input id="search" type="search" placeholder={`Search ${rules.length} rules — try "yield", "stream", "retry"…`} autocomplete="off" />
         <div class="pills" id="pills">
@@ -197,6 +239,32 @@ const counts = {
       .sev.error { color: var(--error); }
       .sev.warn { color: var(--warn); }
       .sev.info { color: var(--info); }
+
+      .concepts {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 0;
+        border: 1px solid var(--border); margin-bottom: 40px;
+      }
+      @media (max-width: 720px) { .concepts { grid-template-columns: 1fr; } }
+      .concept {
+        background: var(--panel); padding: 20px 24px;
+        border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
+        margin-right: -1px; margin-bottom: -1px;
+      }
+      .concept.wide { grid-column: 1 / -1; }
+      .concept h3 { margin: 0 0 8px; font-size: 15px; }
+      .concept p { color: var(--muted); font-size: 14px; margin: 0 0 10px; }
+      .concept code { color: var(--accent); font-size: 13px; }
+      .diagram {
+        background: var(--panel-2); border: 1px solid var(--border);
+        padding: 12px 14px; font-size: 12.5px; line-height: 1.5;
+        color: var(--text); overflow-x: auto; margin: 0 0 10px;
+      }
+      .benefits { display: flex; flex-wrap: wrap; gap: 6px; }
+      .benefits span {
+        font-size: 12px; color: var(--accent);
+        border: 1px solid var(--border); padding: 3px 10px; background: var(--panel-2);
+      }
+      .links { font-size: 13px; }
 
       .filters {
         position: sticky; top: 0; z-index: 2;

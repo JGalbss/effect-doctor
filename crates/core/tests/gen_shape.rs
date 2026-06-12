@@ -128,3 +128,64 @@ export class Db extends Context.Tag("Db")<Db, { query: () => string }>() {}
         "schema-class-self-mismatch",
     );
 }
+
+#[test]
+fn try_promise_ignoring_abort_signal() {
+    let source = r#"
+import { Effect } from "effect"
+const ignored = Effect.tryPromise({
+  try: () => fetch("https://api.example.com/data"),
+  catch: (cause) => ({ _tag: "FetchError", cause }),
+})
+const passed = Effect.tryPromise({
+  try: (signal) => fetch("https://api.example.com/data", { signal }),
+  catch: (cause) => ({ _tag: "FetchError", cause }),
+})
+"#;
+    assert_fires(source, "prefer-abort-signal-passthrough", 1);
+}
+
+#[test]
+fn non_signal_aware_promise_is_fine() {
+    assert_silent(
+        r#"
+import { Effect } from "effect"
+declare const db: { query: () => Promise<unknown> }
+const queried = Effect.tryPromise({
+  try: () => db.query(),
+  catch: (cause) => ({ _tag: "DbError", cause }),
+})
+"#,
+        "prefer-abort-signal-passthrough",
+    );
+}
+
+#[test]
+fn nested_flatmap_pipes() {
+    assert_fires(
+        r#"
+import { Effect } from "effect"
+declare const getUser: (id: string) => ReturnType<typeof Effect.succeed<{ id: string }>>
+declare const getAccount: (u: unknown) => ReturnType<typeof Effect.succeed<{ n: number }>>
+declare const createInvoice: (u: unknown, a: unknown) => ReturnType<typeof Effect.succeed<string>>
+const program = getUser("1").pipe(
+  Effect.flatMap((user) =>
+    getAccount(user).pipe(Effect.flatMap((account) => createInvoice(user, account)))
+  )
+)
+"#,
+        "prefer-gen-over-nested-flatmap",
+        1,
+    );
+}
+
+#[test]
+fn single_flatmap_is_fine() {
+    assert_silent(
+        r#"
+import { Effect } from "effect"
+const program = Effect.succeed(1).pipe(Effect.flatMap((n) => Effect.succeed(n + 1)))
+"#,
+        "prefer-gen-over-nested-flatmap",
+    );
+}
