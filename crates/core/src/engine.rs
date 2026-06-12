@@ -24,6 +24,8 @@ pub struct ScanOptions {
     pub base: Option<String>,
     /// Merge type-aware diagnostics from @effect/language-service.
     pub deep: bool,
+    /// Experimental: vanilla-TS-to-Effect adoption recommendations.
+    pub adopt: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -153,7 +155,7 @@ pub fn scan(options: &ScanOptions) -> Result<ScanResult, String> {
     let outcomes: Vec<FileOutcome> = files
         .par_iter()
         .filter_map(|path| {
-            let mut outcome = process_file(&options.root, path, v4_active)?;
+            let mut outcome = process_file(&options.root, path, v4_active, options.adopt)?;
             if let Some(filter) = &scope_filter {
                 filter.retain_diagnostics(path, &mut outcome.diagnostics);
             }
@@ -209,7 +211,7 @@ struct FileOutcome {
     diagnostics: Vec<Diagnostic>,
 }
 
-fn process_file(root: &Path, path: &Path, v4_active: bool) -> Option<FileOutcome> {
+fn process_file(root: &Path, path: &Path, v4_active: bool, adopt: bool) -> Option<FileOutcome> {
     let source = fs::read_to_string(path).ok()?;
     // Fast pre-filter: every rule today requires an effect import; skip the
     // parse entirely for files that cannot mention one.
@@ -224,16 +226,26 @@ fn process_file(root: &Path, path: &Path, v4_active: bool) -> Option<FileOutcome
         .unwrap_or(path)
         .to_string_lossy()
         .into_owned();
-    let diagnostics = lint_source(&display_path, &source, v4_active);
+    let diagnostics = lint_source_with(&display_path, &source, v4_active, adopt);
     Some(FileOutcome {
         has_effect: true,
         diagnostics,
     })
 }
 
-/// Lint a single source text. Public so tests (and future editor/LSP hosts)
-/// can lint snippets without touching the filesystem.
+/// Lint a single source text. Public so tests and the LSP host can lint
+/// snippets without touching the filesystem.
 pub fn lint_source(display_path: &str, source: &str, v4_active: bool) -> Vec<Diagnostic> {
+    lint_source_with(display_path, source, v4_active, false)
+}
+
+/// `lint_source` with the experimental adoption rules toggled.
+pub fn lint_source_with(
+    display_path: &str,
+    source: &str,
+    v4_active: bool,
+    adopt: bool,
+) -> Vec<Diagnostic> {
     let allocator = Allocator::default();
     let source_type =
         SourceType::from_path(Path::new(display_path)).unwrap_or_else(|_| SourceType::ts());
@@ -245,7 +257,7 @@ pub fn lint_source(display_path: &str, source: &str, v4_active: bool) -> Vec<Dia
     if !imports.has_any() {
         return Vec::new();
     }
-    let ctx = Runner::new(imports, v4_active).run(&parsed.program);
+    let ctx = Runner::new(imports, v4_active, adopt).run(&parsed.program);
     finalize(source, display_path, classify_file(display_path), ctx.raw)
 }
 

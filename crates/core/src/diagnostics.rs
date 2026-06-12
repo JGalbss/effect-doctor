@@ -26,6 +26,8 @@ pub enum Category {
     V4Migration,
     /// `--deep` findings merged from @effect/language-service.
     TypeAware,
+    /// `--adopt` (experimental): vanilla TS that should migrate to Effect.
+    Adoption,
 }
 
 impl Category {
@@ -37,6 +39,7 @@ impl Category {
             Category::Performance => "Performance",
             Category::V4Migration => "v4 Migration",
             Category::TypeAware => "Type-aware",
+            Category::Adoption => "Effect Adoption",
         }
     }
 }

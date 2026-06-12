@@ -646,5 +646,53 @@
     "help": "effect/unstable/* APIs may break in minor releases — fine to use, worth tracking.",
     "id": "v4-unstable-import-awareness",
     "severity": "info"
+  },
+  {
+    "bad": "async function loadUser(id: string) {\n  const res = await fetch(`/users/${id}`)\n  return res.json()\n}",
+    "category": "Effect Adoption",
+    "good": "const loadUser = Effect.fn(\"loadUser\")(function* (id: string) {\n  const res = yield* Effect.tryPromise({\n    try: () => fetch(`/users/${id}`),\n    catch: (cause) => new FetchError({ cause }),\n  })\n  return yield* Effect.tryPromise(() => res.json())\n})",
+    "help": "async/await runs outside Effect: untyped errors, no interruption, no tracing. Migrate to Effect.fn (or Effect.gen) with Effect.tryPromise at the Promise boundaries.",
+    "id": "adopt-async-function",
+    "severity": "info"
+  },
+  {
+    "bad": "fetchUser(id).then((user) => enrich(user)).then(save)",
+    "category": "Effect Adoption",
+    "good": "Effect.tryPromise(() => fetchUser(id)).pipe(\n  Effect.flatMap((user) => Effect.tryPromise(() => enrich(user))),\n  Effect.flatMap((user) => Effect.tryPromise(() => save(user)))\n)",
+    "help": ".then() chains are Effect pipelines without the safety. Wrap the source with Effect.tryPromise and compose with Effect.map / Effect.flatMap.",
+    "id": "adopt-promise-chain",
+    "severity": "info"
+  },
+  {
+    "bad": "new Promise((resolve, reject) => {\n  socket.once(\"data\", resolve)\n  socket.once(\"error\", reject)\n})",
+    "category": "Effect Adoption",
+    "good": "Effect.async<Buffer, SocketError>((resume) => {\n  socket.once(\"data\", (d) => resume(Effect.succeed(d)))\n  socket.once(\"error\", (e) => resume(Effect.fail(new SocketError({ cause: e }))))\n})",
+    "help": "Hand-rolled Promise constructors (resolve/reject plumbing) map directly onto Effect.async — with interruption support included.",
+    "id": "adopt-new-promise",
+    "severity": "info"
+  },
+  {
+    "bad": "await Promise.all(ids.map(fetchUser))",
+    "category": "Effect Adoption",
+    "good": "yield* Effect.forEach(ids, (id) => fetchUser(id), { concurrency: 10 })",
+    "help": "Promise.all has no concurrency limit and no interruption. Effect.all / Effect.forEach with { concurrency } is the structured equivalent.",
+    "id": "adopt-promise-all",
+    "severity": "info"
+  },
+  {
+    "bad": "for (const id of ids) {\n  await processUser(id) // strictly sequential\n}",
+    "category": "Effect Adoption",
+    "good": "yield* Effect.forEach(ids, (id) => processUser(id), { concurrency: 5 })",
+    "help": "Sequential awaits in a loop are the slowest possible shape. Effect.forEach(items, fn, { concurrency: N }) runs them structured and concurrent — or keep it sequential but interruptible.",
+    "id": "adopt-await-in-loop",
+    "severity": "warn"
+  },
+  {
+    "bad": "Effect.gen(function* () {\n  for (const id of ids) {\n    yield* processUser(id)\n  }\n})",
+    "category": "Idiomatic",
+    "good": "Effect.forEach(ids, (id) => processUser(id), { concurrency: 5 })\n// or { concurrency: 1 } to stay sequential — but explicit",
+    "help": "A loop of yields inside Effect.gen works, but Effect.forEach / Effect.all make concurrency explicit and tunable, and keep interruption semantics obvious.",
+    "id": "prefer-foreach-over-yield-loop",
+    "severity": "info"
   }
 ]

@@ -338,6 +338,31 @@ pub fn example_for(rule: &str) -> Option<RuleExample> {
             "import { HttpApi } from \"effect/unstable/httpapi\"",
             "// fine to use — unstable APIs may change in minor releases; pin exactly",
         ),
+        // ─── adoption (experimental, --adopt) ───
+        "adopt-async-function" => (
+            "async function loadUser(id: string) {\n  const res = await fetch(`/users/${id}`)\n  return res.json()\n}",
+            "const loadUser = Effect.fn(\"loadUser\")(function* (id: string) {\n  const res = yield* Effect.tryPromise({\n    try: () => fetch(`/users/${id}`),\n    catch: (cause) => new FetchError({ cause }),\n  })\n  return yield* Effect.tryPromise(() => res.json())\n})",
+        ),
+        "adopt-promise-chain" => (
+            "fetchUser(id).then((user) => enrich(user)).then(save)",
+            "Effect.tryPromise(() => fetchUser(id)).pipe(\n  Effect.flatMap((user) => Effect.tryPromise(() => enrich(user))),\n  Effect.flatMap((user) => Effect.tryPromise(() => save(user)))\n)",
+        ),
+        "adopt-new-promise" => (
+            "new Promise((resolve, reject) => {\n  socket.once(\"data\", resolve)\n  socket.once(\"error\", reject)\n})",
+            "Effect.async<Buffer, SocketError>((resume) => {\n  socket.once(\"data\", (d) => resume(Effect.succeed(d)))\n  socket.once(\"error\", (e) => resume(Effect.fail(new SocketError({ cause: e }))))\n})",
+        ),
+        "adopt-promise-all" => (
+            "await Promise.all(ids.map(fetchUser))",
+            "yield* Effect.forEach(ids, (id) => fetchUser(id), { concurrency: 10 })",
+        ),
+        "adopt-await-in-loop" => (
+            "for (const id of ids) {\n  await processUser(id) // strictly sequential\n}",
+            "yield* Effect.forEach(ids, (id) => processUser(id), { concurrency: 5 })",
+        ),
+        "prefer-foreach-over-yield-loop" => (
+            "Effect.gen(function* () {\n  for (const id of ids) {\n    yield* processUser(id)\n  }\n})",
+            "Effect.forEach(ids, (id) => processUser(id), { concurrency: 5 })\n// or { concurrency: 1 } to stay sequential — but explicit",
+        ),
         _ => return None,
     };
     Some(RuleExample { bad, good })

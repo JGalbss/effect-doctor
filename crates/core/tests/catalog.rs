@@ -28,5 +28,5 @@ fn rule_ids_are_unique() {
 fn catalog_size_matches_expectation() {
     // Bump deliberately when adding rules — catches metas() lists that were
     // not updated when a new RuleMeta was added to a file.
-    assert_eq!(all_metas().len(), 81);
+    assert_eq!(all_metas().len(), 87);
 }

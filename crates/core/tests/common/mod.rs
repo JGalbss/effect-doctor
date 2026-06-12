@@ -2,7 +2,7 @@
 // different subset of helpers.
 #![allow(dead_code)]
 
-use effect_doctor_core::{lint_source, Diagnostic};
+use effect_doctor_core::{lint_source, lint_source_with, Diagnostic};
 
 pub fn lint(source: &str) -> Vec<Diagnostic> {
     lint_source("src/example.ts", source, false)
@@ -10,6 +10,21 @@ pub fn lint(source: &str) -> Vec<Diagnostic> {
 
 pub fn lint_v4(source: &str) -> Vec<Diagnostic> {
     lint_source("src/example.ts", source, true)
+}
+
+pub fn lint_adopt(source: &str) -> Vec<Diagnostic> {
+    lint_source_with("src/example.ts", source, false, true)
+}
+
+#[track_caller]
+pub fn assert_fires_adopt(source: &str, rule: &str, times: usize) {
+    let diagnostics = lint_adopt(source);
+    let found = count(&diagnostics, rule);
+    assert_eq!(
+        found, times,
+        "expected `{rule}` to fire {times}x under --adopt, fired {found}x.\nall: {:#?}\nsource:\n{source}",
+        diagnostics
+    );
 }
 
 pub fn count(diagnostics: &[Diagnostic], rule: &str) -> usize {

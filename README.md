@@ -28,6 +28,8 @@ effect-doctor explain no-map-returning-effect   # why + how to rewrite it
 effect-doctor rules --json               # full catalog with rewrite recipes
 effect-doctor --deep                     # merge type-aware @effect/language-service findings
 effect-doctor lsp                        # run as a language server (editor diagnostics)
+effect-doctor --adopt --scope lines      # experimental: vanilla-TS → Effect migration
+                                         # recommendations, on exactly your PR's lines
 ```
 
 ## Docs site
@@ -62,6 +64,10 @@ is in [docs/RULES.md](docs/RULES.md); architecture and roadmap in
   rules — we never reimplement type analysis.
 - `effect-doctor lsp`: stdio language server publishing the syntactic rule set as
   editor diagnostics (full-sync; rule id as the diagnostic code).
+- `--adopt` (experimental): flags vanilla TS that should migrate to Effect — async
+  functions, `.then()` chains, `new Promise`, `Promise.all`, sequential awaits in loops —
+  each with the clean Effect rewrite. `prefer-foreach-over-yield-loop` (yield loops
+  inside Effect.gen → `Effect.forEach`) is always on as info.
 - Planned: suppression comments, config file, editor extension packaging, agent
   handoff, npm distribution as per-platform binaries.
 

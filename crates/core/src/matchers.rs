@@ -197,6 +197,33 @@ pub fn block_has_own_yield(block: &BlockStatement) -> bool {
     search.found
 }
 
+/// Does the statement contain a `yield` belonging to the enclosing generator?
+pub fn statement_has_own_yield(statement: &Statement) -> bool {
+    let mut search = OwnYieldSearch { found: false };
+    search.visit_statement(statement);
+    search.found
+}
+
+struct OwnAwaitSearch {
+    found: bool,
+}
+
+impl<'a> Visit<'a> for OwnAwaitSearch {
+    fn visit_await_expression(&mut self, _await_expr: &oxc_ast::ast::AwaitExpression<'a>) {
+        self.found = true;
+    }
+    // Awaits inside nested functions belong to those functions.
+    fn visit_function(&mut self, _function: &Function<'a>, _flags: ScopeFlags) {}
+    fn visit_arrow_function_expression(&mut self, _arrow: &ArrowFunctionExpression<'a>) {}
+}
+
+/// Does the statement contain an `await` belonging to the enclosing function?
+pub fn statement_has_own_await(statement: &Statement) -> bool {
+    let mut search = OwnAwaitSearch { found: false };
+    search.visit_statement(statement);
+    search.found
+}
+
 /// The body expression of a handler: concise arrow body, or the argument of a
 /// lone `return` in a block body.
 pub fn function_result_expression<'a, 'b>(

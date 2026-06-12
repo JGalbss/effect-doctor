@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 
 use oxc_ast::ast::{
-    ArrowFunctionExpression, BinaryExpression, CallExpression, Class, Expression, Function,
-    ImportDeclaration, NewExpression, Program, ReturnStatement, StaticMemberExpression,
-    SwitchStatement, TaggedTemplateExpression, ThrowStatement, TryStatement, YieldExpression,
+    ArrowFunctionExpression, BinaryExpression, CallExpression, Class, DoWhileStatement,
+    Expression, ForInStatement, ForOfStatement, ForStatement, Function, ImportDeclaration,
+    NewExpression, Program, ReturnStatement, StaticMemberExpression, SwitchStatement,
+    TaggedTemplateExpression, ThrowStatement, TryStatement, WhileStatement, YieldExpression,
 };
 use oxc_ast_visit::{walk, Visit};
 use oxc_syntax::scope::ScopeFlags;
@@ -23,10 +24,16 @@ pub struct Runner {
 }
 
 impl Runner {
-    pub fn new(imports: EffectImports, v4_active: bool) -> Self {
+    pub fn new(imports: EffectImports, v4_active: bool, adopt_active: bool) -> Self {
         Runner {
-            ctx: FileCtx::new(imports, v4_active),
+            ctx: FileCtx::new(imports, v4_active, adopt_active),
             marked: HashMap::new(),
+        }
+    }
+
+    fn dispatch_loop(&mut self, loop_span: oxc_span::Span, body: &oxc_ast::ast::Statement) {
+        for rule in self.rules() {
+            rule.on_loop(loop_span, body, &mut self.ctx);
         }
     }
 
@@ -107,6 +114,31 @@ impl<'a> Visit<'a> for Runner {
             rule.on_throw(throw_stmt, &mut self.ctx);
         }
         walk::walk_throw_statement(self, throw_stmt);
+    }
+
+    fn visit_for_statement(&mut self, for_stmt: &ForStatement<'a>) {
+        self.dispatch_loop(for_stmt.span, &for_stmt.body);
+        walk::walk_for_statement(self, for_stmt);
+    }
+
+    fn visit_for_of_statement(&mut self, for_of: &ForOfStatement<'a>) {
+        self.dispatch_loop(for_of.span, &for_of.body);
+        walk::walk_for_of_statement(self, for_of);
+    }
+
+    fn visit_for_in_statement(&mut self, for_in: &ForInStatement<'a>) {
+        self.dispatch_loop(for_in.span, &for_in.body);
+        walk::walk_for_in_statement(self, for_in);
+    }
+
+    fn visit_while_statement(&mut self, while_stmt: &WhileStatement<'a>) {
+        self.dispatch_loop(while_stmt.span, &while_stmt.body);
+        walk::walk_while_statement(self, while_stmt);
+    }
+
+    fn visit_do_while_statement(&mut self, do_while: &DoWhileStatement<'a>) {
+        self.dispatch_loop(do_while.span, &do_while.body);
+        walk::walk_do_while_statement(self, do_while);
     }
 
     fn visit_return_statement(&mut self, return_stmt: &ReturnStatement<'a>) {

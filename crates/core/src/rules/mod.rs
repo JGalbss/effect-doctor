@@ -1,6 +1,6 @@
 use oxc_ast::ast::{
     ArrowFunctionExpression, BinaryExpression, CallExpression, Class, Function, ImportDeclaration,
-    NewExpression, ReturnStatement, StaticMemberExpression, SwitchStatement,
+    NewExpression, ReturnStatement, Statement, StaticMemberExpression, SwitchStatement,
     TaggedTemplateExpression, ThrowStatement, TryStatement, YieldExpression,
 };
 use oxc_span::Span;
@@ -8,6 +8,7 @@ use oxc_span::Span;
 use crate::diagnostics::{RawDiagnostic, RuleMeta};
 use crate::effect_imports::EffectImports;
 
+mod adopt;
 mod catch_idioms;
 mod composition_limits;
 mod gen_shape;
@@ -76,16 +77,18 @@ pub struct FileCtx {
     pub scratch: Scratch,
     pub raw: Vec<RawDiagnostic>,
     v4_active: bool,
+    adopt_active: bool,
 }
 
 impl FileCtx {
-    pub fn new(imports: EffectImports, v4_active: bool) -> Self {
+    pub fn new(imports: EffectImports, v4_active: bool, adopt_active: bool) -> Self {
         FileCtx {
             imports,
             stack: Vec::new(),
             scratch: Scratch::default(),
             raw: Vec::new(),
             v4_active,
+            adopt_active,
         }
     }
 
@@ -105,6 +108,11 @@ impl FileCtx {
     /// (detected from package.json) or the scan runs with --migrate.
     pub fn v4_active(&self) -> bool {
         self.v4_active
+    }
+
+    /// Experimental adoption rules fire only under --adopt.
+    pub fn adopt_active(&self) -> bool {
+        self.adopt_active
     }
 
     pub fn report(&mut self, meta: &'static RuleMeta, span: Span, message: String) {
@@ -130,6 +138,8 @@ pub trait Rule: Sync {
     fn on_binary(&self, _binary: &BinaryExpression<'_>, _ctx: &mut FileCtx) {}
     fn on_switch(&self, _switch_stmt: &SwitchStatement<'_>, _ctx: &mut FileCtx) {}
     fn on_return(&self, _return_stmt: &ReturnStatement<'_>, _ctx: &mut FileCtx) {}
+    /// Any loop statement (for / for-of / for-in / while / do-while).
+    fn on_loop(&self, _loop_span: Span, _body: &Statement<'_>, _ctx: &mut FileCtx) {}
     fn on_yield(&self, _yield_expr: &YieldExpression<'_>, _ctx: &mut FileCtx) {}
     fn on_try(&self, _try_stmt: &TryStatement<'_>, _ctx: &mut FileCtx) {}
     fn on_throw(&self, _throw_stmt: &ThrowStatement<'_>, _ctx: &mut FileCtx) {}
@@ -192,4 +202,6 @@ pub static RULES: &[&(dyn Rule + Send + Sync)] = &[
     &v4_no_gen_adapter::V4NoGenAdapter,
     &v4_renames::V4Renames,
     &v4_imports::V4Imports,
+    // adoption (experimental, --adopt; prefer-foreach-over-yield-loop is always on)
+    &adopt::Adopt,
 ];

@@ -66,6 +66,11 @@ struct Cli {
     /// Also run the type-aware tier (@effect/language-service) and merge it
     #[arg(long)]
     deep: bool,
+
+    /// Experimental: recommend vanilla-TS → Effect migrations (async fns,
+    /// .then chains, Promise.all, awaits in loops)
+    #[arg(long)]
+    adopt: bool,
 }
 
 mod lsp;
@@ -192,6 +197,7 @@ fn main() -> ExitCode {
         scope: cli.scope.into(),
         base: cli.base.clone(),
         deep: cli.deep,
+        adopt: cli.adopt,
     }) {
         Ok(result) => result,
         Err(message) => {
