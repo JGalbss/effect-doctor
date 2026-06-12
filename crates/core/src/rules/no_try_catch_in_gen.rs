@@ -13,10 +13,6 @@ static META: RuleMeta = RuleMeta {
 pub struct NoTryCatchInGen;
 
 impl Rule for NoTryCatchInGen {
-    fn meta(&self) -> &'static RuleMeta {
-        &META
-    }
-
     fn on_try(&self, try_stmt: &TryStatement<'_>, ctx: &mut FileCtx) {
         if !ctx.in_effect_gen() {
             return;

@@ -9,6 +9,13 @@ pub enum Severity {
     Info,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum FileContext {
+    Production,
+    Test,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Category {
@@ -56,6 +63,7 @@ pub struct Diagnostic {
     pub message: String,
     pub help: &'static str,
     pub file: String,
+    pub file_context: FileContext,
     pub line: u32,
     pub column: u32,
     pub snippet: String,

@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
 use oxc_ast::ast::{
-    ArrowFunctionExpression, CallExpression, Expression, Function, NewExpression, Program,
-    ThrowStatement, TryStatement, YieldExpression,
+    ArrowFunctionExpression, CallExpression, Class, Expression, Function, ImportDeclaration,
+    NewExpression, Program, StaticMemberExpression, TaggedTemplateExpression, ThrowStatement,
+    TryStatement, YieldExpression,
 };
 use oxc_ast_visit::{walk, Visit};
 use oxc_syntax::scope::ScopeFlags;
@@ -22,15 +23,18 @@ pub struct Runner {
 }
 
 impl Runner {
-    pub fn new(imports: EffectImports) -> Self {
+    pub fn new(imports: EffectImports, v4_active: bool) -> Self {
         Runner {
-            ctx: FileCtx::new(imports),
+            ctx: FileCtx::new(imports, v4_active),
             marked: HashMap::new(),
         }
     }
 
     pub fn run(mut self, program: &Program) -> FileCtx {
         self.visit_program(program);
+        for rule in self.rules() {
+            rule.on_file_end(&mut self.ctx);
+        }
         self.ctx
     }
 
@@ -105,7 +109,38 @@ impl<'a> Visit<'a> for Runner {
         walk::walk_throw_statement(self, throw_stmt);
     }
 
+    fn visit_static_member_expression(&mut self, member: &StaticMemberExpression<'a>) {
+        for rule in self.rules() {
+            rule.on_member(member, &mut self.ctx);
+        }
+        walk::walk_static_member_expression(self, member);
+    }
+
+    fn visit_class(&mut self, class: &Class<'a>) {
+        for rule in self.rules() {
+            rule.on_class(class, &mut self.ctx);
+        }
+        walk::walk_class(self, class);
+    }
+
+    fn visit_import_declaration(&mut self, import: &ImportDeclaration<'a>) {
+        for rule in self.rules() {
+            rule.on_import(import, &mut self.ctx);
+        }
+        walk::walk_import_declaration(self, import);
+    }
+
+    fn visit_tagged_template_expression(&mut self, template: &TaggedTemplateExpression<'a>) {
+        for rule in self.rules() {
+            rule.on_tagged_template(template, &mut self.ctx);
+        }
+        walk::walk_tagged_template_expression(self, template);
+    }
+
     fn visit_function(&mut self, function: &Function<'a>, flags: ScopeFlags) {
+        for rule in self.rules() {
+            rule.on_function(function, &mut self.ctx);
+        }
         let frame = self.frame_for(function.span.start);
         self.ctx.stack.push(frame);
         walk::walk_function(self, function, flags);
@@ -113,6 +148,9 @@ impl<'a> Visit<'a> for Runner {
     }
 
     fn visit_arrow_function_expression(&mut self, arrow: &ArrowFunctionExpression<'a>) {
+        for rule in self.rules() {
+            rule.on_arrow(arrow, &mut self.ctx);
+        }
         let frame = self.frame_for(arrow.span.start);
         self.ctx.stack.push(frame);
         walk::walk_arrow_function_expression(self, arrow);

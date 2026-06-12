@@ -14,10 +14,6 @@ static META: RuleMeta = RuleMeta {
 pub struct PreferRandomService;
 
 impl Rule for PreferRandomService {
-    fn meta(&self) -> &'static RuleMeta {
-        &META
-    }
-
     fn on_call(&self, call: &CallExpression<'_>, ctx: &mut FileCtx) {
         if !ctx.in_effect_code() {
             return;

@@ -14,10 +14,6 @@ static META: RuleMeta = RuleMeta {
 pub struct PreferClockService;
 
 impl Rule for PreferClockService {
-    fn meta(&self) -> &'static RuleMeta {
-        &META
-    }
-
     fn on_call(&self, call: &CallExpression<'_>, ctx: &mut FileCtx) {
         if !ctx.in_effect_code() {
             return;

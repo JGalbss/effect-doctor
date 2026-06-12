@@ -21,10 +21,6 @@ fn is_run_method(prop: &str) -> bool {
 pub struct NoRunInsideEffect;
 
 impl Rule for NoRunInsideEffect {
-    fn meta(&self) -> &'static RuleMeta {
-        &META
-    }
-
     fn on_call(&self, call: &CallExpression<'_>, ctx: &mut FileCtx) {
         if !ctx.in_effect_code() {
             return;

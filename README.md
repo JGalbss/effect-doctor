@@ -26,15 +26,21 @@ cargo build --release
 
 ## Status
 
-Early. 9 rules live (generator hygiene, runtime misuse, Clock/Random/logging services,
-v4 adapter migration). The full ~90-rule spec is in [docs/RULES.md](docs/RULES.md);
-architecture and roadmap in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Early but real: **33 rules live** across correctness, idiomatic, architecture,
+performance, and v4-migration categories, with an integration-test suite covering every
+rule (bad patterns fire, clean code stays silent). The full ~90-rule spec is in
+[docs/RULES.md](docs/RULES.md); architecture and roadmap in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 - Import-aware matching: `import { Effect as E } from "effect"` and
   `import * as Effect from "effect/Effect"` both resolve correctly.
+- Version-aware profiles: effect major detected from package.json; v4-migration rules
+  fire on v4 codebases automatically, or on v3 with `--migrate`.
+- Test-file classification: findings in `*.test.ts` / `test/` paths stay in the report
+  but don't count toward the score (except test-specific rules).
 - Score model: penalty per distinct rule fired (errors 1.5, warnings 0.75), info rules
   never affect the score.
-- Planned: `--scope changed` CI deltas, test-file downgrades, suppression comments,
+- Planned: `--scope changed` CI deltas, suppression comments, config file,
   `--deep` type-aware tier via `@effect/tsgo`, agent handoff, npm distribution as
   per-platform binaries.
 

@@ -9,6 +9,7 @@ pub struct EffectImports {
     /// local binding name -> canonical effect module name ("Effect", "Layer", "Schema", ...)
     locals: HashMap<String, String>,
     has_effect_import: bool,
+    has_effect_vitest: bool,
 }
 
 impl EffectImports {
@@ -23,6 +24,9 @@ impl EffectImports {
                 continue;
             }
             imports.has_effect_import = true;
+            if source == "@effect/vitest" {
+                imports.has_effect_vitest = true;
+            }
             let Some(specifiers) = &decl.specifiers else {
                 continue;
             };
@@ -52,6 +56,10 @@ impl EffectImports {
 
     pub fn has_any(&self) -> bool {
         self.has_effect_import
+    }
+
+    pub fn has_effect_vitest(&self) -> bool {
+        self.has_effect_vitest
     }
 
     pub fn module_of(&self, local: &str) -> Option<&str> {

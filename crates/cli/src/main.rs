@@ -5,7 +5,8 @@ use std::process::ExitCode;
 
 use clap::Parser;
 use effect_doctor_core::{
-    scan, Diagnostic, ScanOptions, ScanResult, Severity, SCORE_GOOD_THRESHOLD, SCORE_OK_THRESHOLD,
+    scan, Diagnostic, FileContext, ScanOptions, ScanResult, Severity, SCORE_GOOD_THRESHOLD,
+    SCORE_OK_THRESHOLD,
 };
 
 #[derive(Parser)]
@@ -26,12 +27,17 @@ struct Cli {
     /// Max locations printed per rule group
     #[arg(long, default_value_t = 5)]
     max_locations: usize,
+
+    /// Run v4-migration rules even on an effect v3 codebase (migration audit)
+    #[arg(long)]
+    migrate: bool,
 }
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
     let result = scan(&ScanOptions {
         root: cli.path.clone(),
+        migrate: cli.migrate,
     });
 
     if cli.json {
@@ -171,13 +177,14 @@ fn render(result: &ScanResult, verbose: bool, max_locations: usize) {
         println!("    {}{}{}", p.dim, diagnostics[0].help, p.reset);
         for diagnostic in diagnostics.iter().take(max_locations) {
             println!(
-                "    {}{}:{}:{}{}  {}",
+                "    {}{}:{}:{}{}  {}{}",
                 p.cyan,
                 diagnostic.file,
                 diagnostic.line,
                 diagnostic.column,
                 p.reset,
-                diagnostic.snippet.trim()
+                diagnostic.snippet.trim(),
+                test_marker(p, diagnostic)
             );
         }
         let hidden = diagnostics.len().saturating_sub(max_locations);
@@ -200,16 +207,34 @@ fn render(result: &ScanResult, verbose: bool, max_locations: usize) {
     }
 
     println!(
-        "  {}Scanned {} files ({} using effect) in {}ms — {} issue{}{}",
+        "  {}Scanned {} files ({} using effect{}) in {}ms — {} issue{}{}",
         p.dim,
         result.files_scanned,
         result.effect_files,
+        effect_profile_label(result),
         result.duration_ms,
         result.diagnostics.len(),
         plural(result.diagnostics.len()),
         p.reset
     );
     println!();
+}
+
+fn effect_profile_label(result: &ScanResult) -> String {
+    let Some(major) = result.effect_major else {
+        return String::new();
+    };
+    if result.v4_rules_active {
+        return format!(", effect v{major}, v4 rules on");
+    }
+    format!(", effect v{major}")
+}
+
+fn test_marker(p: &Palette, diagnostic: &Diagnostic) -> String {
+    if diagnostic.file_context != FileContext::Test {
+        return String::new();
+    }
+    format!("  {}(test — not scored){}", p.dim, p.reset)
 }
 
 fn plural(count: usize) -> &'static str {
