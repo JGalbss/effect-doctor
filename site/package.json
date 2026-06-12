@@ -9,6 +9,10 @@
     "gen": "cd .. && cargo run -q -p effect-doctor -- rules --json > site/src/data/rules.json"
   },
   "dependencies": {
-    "astro": "^5"
+    "@codemirror/lang-javascript": "^6.2.5",
+    "@codemirror/theme-one-dark": "^6.1.3",
+    "astro": "^5",
+    "codemirror": "^6.0.2",
+    "prettier": "^3.8.4"
   }
 }

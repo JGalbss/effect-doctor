@@ -44,34 +44,61 @@ export async function syncUsers(ids: string[]) {
         <span class="score-box" id="score">—</span>
         <label><input type="checkbox" id="v4" /> v4 rules</label>
         <label><input type="checkbox" id="adopt" checked /> adopt mode (vanilla TS → Effect)</label>
+        <button class="tool" id="format" title="Prettier (⌘S)">format</button>
+        <button class="tool" id="share" title="Copy a link to this code">share</button>
+        <button class="tool" id="reset" title="Restore the sample">reset</button>
         <span class="status" id="status">loading wasm…</span>
       </div>
 
       <div class="split">
-        <textarea id="editor" spellcheck="false">{sample}</textarea>
+        <div id="editor"></div>
         <div id="results"><p class="muted">loading…</p></div>
       </div>
 
       <footer>
-        <p><a href="/">← all 89 rules</a> · <a href="https://github.com/JGalbss/effect-doctor">github</a></p>
+        <p><a href="/">← all 89 rules</a> · <a href="https://github.com/JGalbss/effect-doctor">github</a> · <span class="muted">autosaves locally · ⌘S formats</span></p>
       </footer>
     </main>
 
-    <script type="module">
-      import init, { lint } from "/pkg/effect_doctor_wasm.js"
+    <script type="application/json" id="sample-code" set:html={JSON.stringify(sample)}></script>
 
-      const editor = document.getElementById("editor")
+    <script>
+      import { EditorView, basicSetup } from "codemirror"
+      import { javascript } from "@codemirror/lang-javascript"
+      import { oneDark } from "@codemirror/theme-one-dark"
+      import * as prettier from "prettier/standalone"
+      import * as prettierEstree from "prettier/plugins/estree"
+      import * as prettierTs from "prettier/plugins/typescript"
+
       const results = document.getElementById("results")
       const scoreBox = document.getElementById("score")
       const status = document.getElementById("status")
       const v4 = document.getElementById("v4")
       const adopt = document.getElementById("adopt")
 
+      const STORAGE_KEY = "effect-doctor-playground"
+      const sample = JSON.parse(document.getElementById("sample-code").textContent)
+      const fromHash = () => {
+        if (location.hash.length < 2) return null
+        try {
+          return decodeURIComponent(escape(atob(location.hash.slice(1))))
+        } catch {
+          return null
+        }
+      }
+      const initialCode = fromHash() ?? localStorage.getItem(STORAGE_KEY) ?? sample
+
+      let lintFn = null
+      let view
+
       const escapeHtml = (text) =>
         text.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c])
 
+      const code = () => view.state.doc.toString()
+
       const render = () => {
-        const report = JSON.parse(lint(editor.value, v4.checked, adopt.checked))
+        if (!lintFn) return
+        const report = JSON.parse(lintFn(code(), v4.checked, adopt.checked))
         const { diagnostics, score } = report
         scoreBox.textContent = `${score.score}/100`
         scoreBox.className = `score-box ${score.score >= 75 ? "good" : score.score >= 50 ? "ok" : "bad"}`
@@ -96,18 +123,80 @@ export async function syncUsers(ids: string[]) {
           .join("")
       }
 
-      let timer
-      const schedule = () => {
-        clearTimeout(timer)
-        timer = setTimeout(render, 150)
+      const persist = () => {
+        localStorage.setItem(STORAGE_KEY, code())
+        status.textContent = "saved ✓"
       }
 
-      await init()
-      status.textContent = "ready"
-      render()
-      editor.addEventListener("input", schedule)
+      let timer
+      const onChange = () => {
+        clearTimeout(timer)
+        timer = setTimeout(() => {
+          render()
+          persist()
+        }, 200)
+      }
+
+      view = new EditorView({
+        doc: initialCode,
+        parent: document.getElementById("editor"),
+        extensions: [
+          basicSetup,
+          javascript({ typescript: true }),
+          oneDark,
+          EditorView.updateListener.of((update) => {
+            if (update.docChanged) onChange()
+          }),
+        ],
+      })
+
+      const setCode = (text) => {
+        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } })
+      }
+
+      const formatCode = async () => {
+        try {
+          const formatted = await prettier.format(code(), {
+            parser: "typescript",
+            plugins: [prettierEstree, prettierTs],
+            semi: false,
+            printWidth: 90,
+          })
+          setCode(formatted)
+          status.textContent = "formatted ✓"
+        } catch (error) {
+          status.textContent = `format failed: syntax error`
+        }
+      }
+
+      document.getElementById("format").addEventListener("click", formatCode)
+      document.getElementById("reset").addEventListener("click", () => {
+        setCode(sample)
+        history.replaceState(null, "", location.pathname)
+      })
+      document.getElementById("share").addEventListener("click", async (event) => {
+        const hash = btoa(unescape(encodeURIComponent(code())))
+        const url = `${location.origin}${location.pathname}#${hash}`
+        history.replaceState(null, "", `#${hash}`)
+        await navigator.clipboard.writeText(url)
+        event.target.textContent = "copied ✓"
+        setTimeout(() => (event.target.textContent = "share"), 1200)
+      })
+      document.addEventListener("keydown", (event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key === "s") {
+          event.preventDefault()
+          formatCode()
+        }
+      })
       v4.addEventListener("change", render)
       adopt.addEventListener("change", render)
+
+      const wasmModuleUrl = `${location.origin}/pkg/effect_doctor_wasm.js`
+      const wasm = await import(/* @vite-ignore */ wasmModuleUrl)
+      await wasm.default()
+      lintFn = wasm.lint
+      status.textContent = "ready"
+      render()
     </script>
 
     <style is:global>
@@ -130,7 +219,7 @@ export async function syncUsers(ids: string[]) {
         color: var(--text);
         font: 15px/1.6 ui-sans-serif, system-ui, sans-serif;
       }
-      main { max-width: 1200px; margin: 0 auto; padding: 40px 24px 64px; }
+      main { max-width: 1280px; margin: 0 auto; padding: 40px 24px 64px; }
       a { color: var(--accent); text-decoration: none; }
       header { margin-bottom: 20px; }
       h1 { font-size: 26px; margin: 0 0 4px; }
@@ -140,12 +229,17 @@ export async function syncUsers(ids: string[]) {
       .tagline { color: var(--muted); margin: 0; }
 
       .toolbar {
-        display: flex; align-items: center; gap: 18px;
+        display: flex; align-items: center; gap: 16px;
         background: var(--panel); border: 1px solid var(--border); border-bottom: none;
         padding: 10px 16px; font-size: 13px;
       }
       .toolbar label { color: var(--muted); display: flex; gap: 6px; align-items: center; cursor: pointer; }
       .toolbar input { accent-color: var(--accent); }
+      .tool {
+        background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
+        font: 600 12px ui-monospace, Menlo, monospace; padding: 4px 12px; cursor: pointer;
+      }
+      .tool:hover { color: var(--accent); border-color: var(--accent); }
       .score-box {
         font: 700 15px ui-monospace, Menlo, monospace;
         padding: 3px 12px; border: 1px solid var(--border); background: var(--panel-2);
@@ -157,16 +251,15 @@ export async function syncUsers(ids: string[]) {
 
       .split {
         display: grid; grid-template-columns: 1fr 1fr; gap: 0;
-        border: 1px solid var(--border); height: 70vh;
+        border: 1px solid var(--border); height: 72vh;
       }
       @media (max-width: 900px) { .split { grid-template-columns: 1fr; height: auto; } }
-      #editor {
-        background: var(--panel-2); color: var(--text);
-        border: none; border-right: 1px solid var(--border);
-        resize: none; outline: none; padding: 16px;
-        font: 13px/1.6 ui-monospace, "SF Mono", Menlo, monospace;
-        white-space: pre; min-height: 50vh;
-      }
+      #editor { min-width: 0; border-right: 1px solid var(--border); min-height: 50vh; overflow: hidden; }
+      .cm-editor { height: 100%; background: var(--panel-2); }
+      .cm-editor.cm-focused { outline: none; }
+      .cm-scroller { font: 13px/1.6 ui-monospace, "SF Mono", Menlo, monospace !important; }
+      .cm-gutters { background: var(--panel-2) !important; border-right: 1px solid var(--border) !important; }
+
       #results { overflow-y: auto; background: var(--panel); }
       .finding { border-bottom: 1px solid var(--border); padding: 12px 16px; }
       .finding-head { display: flex; gap: 10px; align-items: center; font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
@@ -181,6 +274,7 @@ export async function syncUsers(ids: string[]) {
       .clean { color: var(--accent); padding: 24px; font-family: ui-monospace, Menlo, monospace; }
       .muted { color: var(--muted); padding: 24px; }
       footer { margin-top: 24px; color: var(--muted); font-size: 14px; }
+      footer .muted { padding: 0; }
     </style>
   </body>
 </html>
