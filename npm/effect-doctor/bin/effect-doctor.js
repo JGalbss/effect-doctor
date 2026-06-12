@@ -3,7 +3,10 @@
 // (biome/esbuild model). This shim resolves it and execs through.
 const { spawnSync } = require("node:child_process")
 
-const platformPackage = `effect-doctor-${process.platform}-${process.arch}`
+// npm's spam filter rejects "win32" in package names, so Windows ships as
+// effect-doctor-windows-x64.
+const platformName = process.platform === "win32" ? "windows" : process.platform
+const platformPackage = `effect-doctor-${platformName}-${process.arch}`
 const binaryName = process.platform === "win32" ? "effect-doctor.exe" : "effect-doctor"
 
 let binaryPath

@@ -21,6 +21,6 @@
     "effect-doctor-darwin-x64": "0.1.0",
     "effect-doctor-linux-arm64": "0.1.0",
     "effect-doctor-linux-x64": "0.1.0",
-    "effect-doctor-win32-x64": "0.1.0"
+    "effect-doctor-windows-x64": "0.1.0"
   }
 }

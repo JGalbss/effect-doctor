@@ -20,7 +20,7 @@ jobs:
             node_os: darwin
             node_arch: arm64
           - target: x86_64-apple-darwin
-            os: macos-13
+            os: macos-14
             npm: effect-doctor-darwin-x64
             node_os: darwin
             node_arch: x64
@@ -36,7 +36,7 @@ jobs:
             node_arch: arm64
           - target: x86_64-pc-windows-msvc
             os: windows-latest
-            npm: effect-doctor-win32-x64
+            npm: effect-doctor-windows-x64
             node_os: win32
             node_arch: x64
     runs-on: ${{ matrix.os }}
