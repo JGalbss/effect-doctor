@@ -396,6 +396,26 @@ pub fn example_for(rule: &str) -> Option<RuleExample> {
             "const usageBarFill = (p) => p >= 100 ? red : p >= 80 ? amber : gray\nconst usageText = (p) => p >= 100 ? red : p >= 80 ? amber : gray // copy-paste",
             "const usageTone = (p) => p >= 100 ? red : p >= 80 ? amber : gray\nconst usageBarFill = usageTone\nconst usageText = usageTone",
         ),
+        "agent-no-mutation" => (
+            "let softCeiling = 0\nif (hasSoft) {\n  softCeiling = softCap + freeAllowance // reassigned\n}\npayload.total = softCeiling // mutated in place",
+            "const softCeiling = hasSoft ? softCap + freeAllowance : 0\nconst payload = { ...base, total: softCeiling } // derived once, no mutation",
+        ),
+        "agent-duplicate-cross-file" => (
+            "// src/billing/format.ts\nexport const formatCredits = (n) => `${Math.round(n)} cr`\n\n// src/ui/Usage.tsx — agent re-created the same helper\nconst formatCredits = (n) => `${Math.round(n)} cr`",
+            "// src/billing/format.ts\nexport const formatCredits = (n) => `${Math.round(n)} cr`\n\n// src/ui/Usage.tsx\nimport { formatCredits } from \"../billing/format\"",
+        ),
+        "agent-near-duplicate-function" => (
+            "// a.ts\nexport const toTone = (p) => { const t = pick(p); return clamp(t) }\n// b.ts — lightly-edited copy\nexport const barTone = (q) => { const v = pick(q); return clamp(v) }",
+            "// tone.ts — one source of truth\nexport const tone = (p) => clamp(pick(p))\n// a.ts / b.ts both: import { tone } from \"./tone\"",
+        ),
+        "agent-similar-function-name" => (
+            "// src/a.ts\nexport const parseConfig = (raw) => Schema.decodeUnknownSync(Config)(raw)\n// src/b.ts — same name, divergent impl\nexport const parseConfig = (raw) => JSON.parse(raw)",
+            "// src/config.ts — one canonical parser\nexport const parseConfig = (raw) =>\n  Schema.decodeUnknownEffect(Config)(JSON.parse(raw))",
+        ),
+        "agent-similar-shape" => (
+            "// both take (id) and call getUser + decode + log — same job, two routes\nexport const loadUser = (id) => { ... }\nexport const fetchUser = (id) => { ... }",
+            "// keep one; derive the other or delete it\nexport const loadUser = (id) => Effect.gen(function* () { ... })\nexport const fetchUser = loadUser",
+        ),
         _ => return None,
     };
     Some(RuleExample { bad, good })

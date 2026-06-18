@@ -7,21 +7,20 @@
 //! escalates each to `error` so the scan can gate CI. `agent-duplicate-function`
 //! is the exception — it stays an `info` suggestion regardless of `--agent-strict`.
 
-use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
 
 use oxc_ast::ast::{
-    ArrowFunctionExpression, BinaryExpression, ConditionalExpression, Expression, Function,
-    FunctionBody, IfStatement, Statement, VariableDeclaration, VariableDeclarationKind,
+    ArrowFunctionExpression, AssignmentExpression, AssignmentTarget, BinaryExpression,
+    ConditionalExpression, Expression, Function, FunctionBody, IfStatement, Statement,
+    VariableDeclaration, VariableDeclarationKind,
 };
-use oxc_ast_visit::{walk, Visit};
 use oxc_span::Span;
 use oxc_syntax::operator::BinaryOperator;
 
 use crate::diagnostics::{Category, RuleMeta, Severity};
 use crate::matchers::unwrap_parens;
 use crate::rules::{FileCtx, Rule};
+use crate::structural;
 
 static IF_ELSE_CHAIN: RuleMeta = RuleMeta {
     id: "agent-no-if-else-chain",
@@ -65,9 +64,12 @@ static DUPLICATE_FUNCTION: RuleMeta = RuleMeta {
     help: "Two functions in this file share a structurally identical body — agents copy-paste instead of extracting. Hoist the shared logic into one reusable helper.",
 };
 
-/// Minimum structural-signature length for duplicate detection — keeps trivial
-/// one-liners (getters, single-return wrappers) from being flagged as clones.
-const MIN_DUP_SIGNATURE: usize = 16;
+static MUTATION: RuleMeta = RuleMeta {
+    id: "agent-no-mutation",
+    severity: Severity::Warn,
+    category: Category::AgentHygiene,
+    help: "Reassigning a binding or mutating a payload in place creates intermediate states that are hard to follow. Derive the final value in one expression (const + Match/reduce/pipe) instead of building it up by mutation.",
+};
 
 fn is_equality(operator: BinaryOperator) -> bool {
     matches!(
@@ -96,91 +98,32 @@ fn keyword_span(span: Span, len: u32) -> Span {
     Span::new(span.start, span.start + len)
 }
 
-/// Structural fingerprint of a function body: a byte stream of node kinds with
-/// identifiers and literal *values* dropped, so renamed copy-paste still
-/// matches. Returns `None` for bodies below the complexity floor.
-fn fingerprint(body: &FunctionBody) -> Option<u64> {
-    let mut visitor = SignatureVisitor { sig: Vec::new() };
-    for statement in &body.statements {
-        visitor.visit_statement(statement);
-    }
-    if visitor.sig.len() < MIN_DUP_SIGNATURE {
-        return None;
-    }
-    let mut hasher = DefaultHasher::new();
-    visitor.sig.hash(&mut hasher);
-    Some(hasher.finish())
-}
-
-struct SignatureVisitor {
-    sig: Vec<u8>,
-}
-
-impl<'a> Visit<'a> for SignatureVisitor {
-    fn visit_statement(&mut self, statement: &Statement<'a>) {
-        // A coarse, stable discriminant per statement kind.
-        self.sig.push(statement_tag(statement));
-        walk::walk_statement(self, statement);
-    }
-
-    fn visit_expression(&mut self, expression: &Expression<'a>) {
-        self.sig.push(expression_tag(expression));
-        walk::walk_expression(self, expression);
-    }
-}
-
-fn statement_tag(statement: &Statement) -> u8 {
-    match statement {
-        Statement::BlockStatement(_) => 1,
-        Statement::IfStatement(_) => 2,
-        Statement::ForStatement(_) => 3,
-        Statement::ForOfStatement(_) => 4,
-        Statement::ForInStatement(_) => 5,
-        Statement::WhileStatement(_) => 6,
-        Statement::DoWhileStatement(_) => 7,
-        Statement::SwitchStatement(_) => 8,
-        Statement::TryStatement(_) => 9,
-        Statement::ThrowStatement(_) => 10,
-        Statement::ReturnStatement(_) => 11,
-        Statement::VariableDeclaration(_) => 12,
-        Statement::ExpressionStatement(_) => 13,
-        Statement::BreakStatement(_) => 14,
-        Statement::ContinueStatement(_) => 15,
-        _ => 16,
-    }
-}
-
-fn expression_tag(expression: &Expression) -> u8 {
-    match expression {
-        Expression::CallExpression(_) => 64,
-        Expression::BinaryExpression(_) => 65,
-        Expression::LogicalExpression(_) => 66,
-        Expression::ConditionalExpression(_) => 67,
-        Expression::StaticMemberExpression(_) => 68,
-        Expression::ComputedMemberExpression(_) => 69,
-        Expression::AwaitExpression(_) => 70,
-        Expression::YieldExpression(_) => 71,
-        Expression::NewExpression(_) => 72,
-        Expression::ArrowFunctionExpression(_) => 73,
-        Expression::ObjectExpression(_) => 74,
-        Expression::ArrayExpression(_) => 75,
-        Expression::AssignmentExpression(_) => 76,
-        Expression::UnaryExpression(_) => 77,
-        Expression::TemplateLiteral(_) => 78,
-        _ => 79,
+/// `=` (or a compound `+=`…) onto a plain identifier is a reassignment; onto a
+/// member/index target it mutates an object in place. Both are intermediate
+/// state — describe which for the message.
+fn mutation_kind(target: &AssignmentTarget) -> &'static str {
+    match target {
+        AssignmentTarget::AssignmentTargetIdentifier(_) => "reassignment",
+        _ => "in-place mutation",
     }
 }
 
 pub struct AgentHygiene;
 
 impl AgentHygiene {
-    fn record_body(&self, body: Option<&FunctionBody>, span: Span, ctx: &mut FileCtx) {
+    fn record_body(
+        &self,
+        body: Option<&FunctionBody>,
+        param_count: usize,
+        span: Span,
+        ctx: &mut FileCtx,
+    ) {
         if !ctx.agent_active() {
             return;
         }
         let Some(body) = body else { return };
-        if let Some(hash) = fingerprint(body) {
-            ctx.scratch.fn_fingerprints.push((hash, span));
+        if let Some(shape) = structural::analyze(body, param_count) {
+            ctx.scratch.fn_fingerprints.push((shape.exact_hash, span));
         }
     }
 }
@@ -193,6 +136,7 @@ impl Rule for AgentHygiene {
             &STRING_EQUALITY_GUARD,
             &RAW_LOOP,
             &LET_BINDING,
+            &MUTATION,
             &DUPLICATE_FUNCTION,
         ];
         METAS
@@ -292,12 +236,29 @@ impl Rule for AgentHygiene {
         );
     }
 
+    fn on_assignment(&self, assignment: &AssignmentExpression<'_>, ctx: &mut FileCtx) {
+        if !ctx.agent_active() {
+            return;
+        }
+        let kind = mutation_kind(&assignment.left);
+        ctx.report_agent(
+            &MUTATION,
+            assignment.span,
+            format!("{kind} — derive the final value once (const + Match/reduce/pipe) instead of building it up"),
+        );
+    }
+
     fn on_function(&self, function: &Function<'_>, ctx: &mut FileCtx) {
-        self.record_body(function.body.as_deref(), function.span, ctx);
+        self.record_body(
+            function.body.as_deref(),
+            function.params.items.len(),
+            function.span,
+            ctx,
+        );
     }
 
     fn on_arrow(&self, arrow: &ArrowFunctionExpression<'_>, ctx: &mut FileCtx) {
-        self.record_body(Some(&arrow.body), arrow.span, ctx);
+        self.record_body(Some(&arrow.body), arrow.params.items.len(), arrow.span, ctx);
     }
 
     fn on_file_end(&self, ctx: &mut FileCtx) {

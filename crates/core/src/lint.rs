@@ -9,7 +9,15 @@ use oxc_span::SourceType;
 
 use crate::diagnostics::{Diagnostic, FileContext, RawDiagnostic};
 use crate::effect_imports::EffectImports;
+use crate::fn_index::{self, FunctionEntry};
 use crate::runner::Runner;
+
+/// One file's full analysis: its diagnostics plus, under `--agent`, the indexed
+/// functions for the engine's cross-file "this already exists" pass.
+pub(crate) struct FileAnalysis {
+    pub diagnostics: Vec<Diagnostic>,
+    pub functions: Vec<FunctionEntry>,
+}
 
 /// Test files keep their diagnostics in the report but (mostly) out of the
 /// score — deliberate rule-breaking is normal in tests.
@@ -75,18 +83,39 @@ pub fn lint_source_with(
 
 /// Lint with the full set of optional tiers selected via [`LintOptions`].
 pub fn lint_source_opts(display_path: &str, source: &str, options: LintOptions) -> Vec<Diagnostic> {
+    analyze_source(display_path, source, options).diagnostics
+}
+
+/// Parse a file once and produce both its diagnostics and (under `--agent`) its
+/// function index. The engine uses the index for cross-file duplicate findings;
+/// every other caller takes `.diagnostics` via [`lint_source_opts`].
+pub(crate) fn analyze_source(
+    display_path: &str,
+    source: &str,
+    options: LintOptions,
+) -> FileAnalysis {
     let allocator = Allocator::default();
     let source_type =
         SourceType::from_path(Path::new(display_path)).unwrap_or_else(|_| SourceType::ts());
     let parsed = Parser::new(&allocator, source, source_type).parse();
     if parsed.panicked {
-        return Vec::new();
+        return FileAnalysis {
+            diagnostics: Vec::new(),
+            functions: Vec::new(),
+        };
     }
     let imports = EffectImports::from_program(&parsed.program);
     if !imports.has_any() {
-        return Vec::new();
+        return FileAnalysis {
+            diagnostics: Vec::new(),
+            functions: Vec::new(),
+        };
     }
     let agent_active = options.agent || options.agent_strict;
+    let functions = match agent_active {
+        true => fn_index::collect_from_program(&parsed.program, source, display_path),
+        false => Vec::new(),
+    };
     let ctx = Runner::new(
         imports,
         options.v4_active,
@@ -95,7 +124,11 @@ pub fn lint_source_opts(display_path: &str, source: &str, options: LintOptions) 
         options.agent_strict,
     )
     .run(&parsed.program);
-    finalize(source, display_path, classify_file(display_path), ctx.raw)
+    let diagnostics = finalize(source, display_path, classify_file(display_path), ctx.raw);
+    FileAnalysis {
+        diagnostics,
+        functions,
+    }
 }
 
 /// Convert span-based raw diagnostics to line/column + source-line snippets.

@@ -153,7 +153,22 @@ refactor suggestion, not a violation. All AST-only; fire file-wide in any file i
 | `agent-no-string-equality-guard` | warn | AST | `x === "literal"` stringly-typed guard → type guard/predicate (`isX`) or `Match.when` (`_tag` deferred to `no-tag-string-comparison`) |
 | `agent-no-raw-loop` | warn | AST | raw `for`/`for-of`/`for-in`/`while`/`do-while` → `Array.map/filter/reduce` or `Effect.forEach`/`Effect.reduce` |
 | `agent-no-let` | warn | AST | `let`/`var` mutation → `const` + functional construction (reduce/Match/pipeline) |
+| `agent-no-mutation` | warn | AST | reassignment (`x = …`) or in-place payload mutation (`obj.k = …`) → derive the final value once instead of intermediate states |
 | `agent-duplicate-function` | info | AST | two functions in one file with a structurally identical body (renamed copy-paste) → extract a shared helper |
+
+### Cross-file "this already exists" (engine pass, `--agent`)
+
+Agents reimplement helpers they can't see. The scan builds a repo-wide index of named /
+variable-bound functions and flags each against the rest of the codebase by four signals,
+**strongest first** (each function reported once, under its strongest match, pointing at the
+location to reuse). All `info` — never scored. `project` detectability: needs the whole file set.
+
+| id | sev | det | summary |
+|---|---|---|---|
+| `agent-duplicate-cross-file` | info | project | structurally identical body in another file → import/reuse it |
+| `agent-near-duplicate-function` | info | project | structurally near-identical body (cosine ≥ 0.92) in another file → likely a lightly-edited copy |
+| `agent-similar-function-name` | info | project | same (non-generic) name defined in another file → likely a duplicate implementation |
+| `agent-similar-shape` | info | project | same param count + call set as another function → may accomplish the same goal another way |
 
 ## Scoring surfaces
 

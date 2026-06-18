@@ -62,6 +62,22 @@ fn flags_let_and_var_not_const() {
 }
 
 #[test]
+fn flags_reassignment_and_in_place_mutation() {
+    let source = src(
+        "export const build = (rows: number[]) => {\n  let total = 0\n  const payload = { total: 0 }\n  total = rows.length\n  payload.total = total\n  return payload\n}\n",
+    );
+    // `total = rows.length` (reassignment) + `payload.total = total` (in-place).
+    assert_fires_agent(&source, "agent-no-mutation", 2);
+}
+
+#[test]
+fn const_binding_without_reassignment_is_not_mutation() {
+    let source =
+        src("export const f = (n: number) => {\n  const doubled = n * 2\n  return doubled\n}\n");
+    assert_fires_agent(&source, "agent-no-mutation", 0);
+}
+
+#[test]
 fn flags_duplicate_function_bodies() {
     let source = src(
         "export const barFill = (p: number) => {\n  const list = collect(p)\n  for (const x of list) {\n    push(x)\n  }\n  return list.length > 0 ? list[0] : null\n}\n\nexport const textFill = (q: number) => {\n  const list = collect(q)\n  for (const x of list) {\n    push(x)\n  }\n  return list.length > 0 ? list[0] : null\n}\n",

@@ -752,11 +752,51 @@
     "severity": "warn"
   },
   {
+    "bad": "let softCeiling = 0\nif (hasSoft) {\n  softCeiling = softCap + freeAllowance // reassigned\n}\npayload.total = softCeiling // mutated in place",
+    "category": "Agent hygiene",
+    "good": "const softCeiling = hasSoft ? softCap + freeAllowance : 0\nconst payload = { ...base, total: softCeiling } // derived once, no mutation",
+    "help": "Reassigning a binding or mutating a payload in place creates intermediate states that are hard to follow. Derive the final value in one expression (const + Match/reduce/pipe) instead of building it up by mutation.",
+    "id": "agent-no-mutation",
+    "severity": "warn"
+  },
+  {
     "bad": "const usageBarFill = (p) => p >= 100 ? red : p >= 80 ? amber : gray\nconst usageText = (p) => p >= 100 ? red : p >= 80 ? amber : gray // copy-paste",
     "category": "Agent hygiene",
     "good": "const usageTone = (p) => p >= 100 ? red : p >= 80 ? amber : gray\nconst usageBarFill = usageTone\nconst usageText = usageTone",
     "help": "Two functions in this file share a structurally identical body — agents copy-paste instead of extracting. Hoist the shared logic into one reusable helper.",
     "id": "agent-duplicate-function",
+    "severity": "info"
+  },
+  {
+    "bad": "// src/billing/format.ts\nexport const formatCredits = (n) => `${Math.round(n)} cr`\n\n// src/ui/Usage.tsx — agent re-created the same helper\nconst formatCredits = (n) => `${Math.round(n)} cr`",
+    "category": "Agent hygiene",
+    "good": "// src/billing/format.ts\nexport const formatCredits = (n) => `${Math.round(n)} cr`\n\n// src/ui/Usage.tsx\nimport { formatCredits } from \"../billing/format\"",
+    "help": "A function with a structurally identical body exists in another file — agents re-create helpers they can't see. Import and reuse the existing one (or extract a shared module).",
+    "id": "agent-duplicate-cross-file",
+    "severity": "info"
+  },
+  {
+    "bad": "// a.ts\nexport const toTone = (p) => { const t = pick(p); return clamp(t) }\n// b.ts — lightly-edited copy\nexport const barTone = (q) => { const v = pick(q); return clamp(v) }",
+    "category": "Agent hygiene",
+    "good": "// tone.ts — one source of truth\nexport const tone = (p) => clamp(pick(p))\n// a.ts / b.ts both: import { tone } from \"./tone\"",
+    "help": "A function in another file is structurally near-identical (a lightly-edited copy). Confirm it isn't the same logic reimplemented, and consolidate to one helper.",
+    "id": "agent-near-duplicate-function",
+    "severity": "info"
+  },
+  {
+    "bad": "// src/a.ts\nexport const parseConfig = (raw) => Schema.decodeUnknownSync(Config)(raw)\n// src/b.ts — same name, divergent impl\nexport const parseConfig = (raw) => JSON.parse(raw)",
+    "category": "Agent hygiene",
+    "good": "// src/config.ts — one canonical parser\nexport const parseConfig = (raw) =>\n  Schema.decodeUnknownEffect(Config)(JSON.parse(raw))",
+    "help": "Another function with the same name is defined elsewhere — likely a duplicate implementation of the same concept. Reuse the existing one or rename to disambiguate.",
+    "id": "agent-similar-function-name",
+    "severity": "info"
+  },
+  {
+    "bad": "// both take (id) and call getUser + decode + log — same job, two routes\nexport const loadUser = (id) => { ... }\nexport const fetchUser = (id) => { ... }",
+    "category": "Agent hygiene",
+    "good": "// keep one; derive the other or delete it\nexport const loadUser = (id) => Effect.gen(function* () { ... })\nexport const fetchUser = loadUser",
+    "help": "Another function takes the same parameters and calls the same helpers — it may accomplish the same goal by a different route. Check whether one can be derived from or replaced by the other.",
+    "id": "agent-similar-shape",
     "severity": "info"
   }
 ]

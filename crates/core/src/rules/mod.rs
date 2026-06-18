@@ -1,8 +1,8 @@
 use oxc_ast::ast::{
-    ArrowFunctionExpression, BinaryExpression, CallExpression, Class, ConditionalExpression,
-    Function, IfStatement, ImportDeclaration, NewExpression, ReturnStatement, Statement,
-    StaticMemberExpression, SwitchStatement, TaggedTemplateExpression, ThrowStatement,
-    TryStatement, VariableDeclaration, YieldExpression,
+    ArrowFunctionExpression, AssignmentExpression, BinaryExpression, CallExpression, Class,
+    ConditionalExpression, Function, IfStatement, ImportDeclaration, NewExpression,
+    ReturnStatement, Statement, StaticMemberExpression, SwitchStatement, TaggedTemplateExpression,
+    ThrowStatement, TryStatement, VariableDeclaration, YieldExpression,
 };
 use oxc_span::Span;
 
@@ -177,6 +177,7 @@ pub trait Rule: Sync {
     fn on_if(&self, _if_stmt: &IfStatement<'_>, _ctx: &mut FileCtx) {}
     fn on_conditional(&self, _conditional: &ConditionalExpression<'_>, _ctx: &mut FileCtx) {}
     fn on_var_decl(&self, _decl: &VariableDeclaration<'_>, _ctx: &mut FileCtx) {}
+    fn on_assignment(&self, _assignment: &AssignmentExpression<'_>, _ctx: &mut FileCtx) {}
     fn on_return(&self, _return_stmt: &ReturnStatement<'_>, _ctx: &mut FileCtx) {}
     /// Any loop statement (for / for-of / for-in / while / do-while).
     fn on_loop(&self, _loop_span: Span, _body: &Statement<'_>, _ctx: &mut FileCtx) {}
@@ -191,11 +192,14 @@ pub trait Rule: Sync {
     fn on_file_end(&self, _ctx: &mut FileCtx) {}
 }
 
-/// All rule metadata across the registry, for listings and export.
+/// All rule metadata across the registry, for listings and export. Includes the
+/// cross-file agent rules, which fire from the engine pass rather than the
+/// per-file [`Rule`] dispatch.
 pub fn all_metas() -> Vec<&'static RuleMeta> {
     RULES
         .iter()
         .flat_map(|rule| rule.metas().iter().copied())
+        .chain(crate::fn_index::cross_file_metas().iter().copied())
         .collect()
 }
 

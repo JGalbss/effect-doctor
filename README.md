@@ -23,7 +23,7 @@ effect-doctor <dir>                      # scan everything
 effect-doctor <dir> --verbose --json     # full report / machine-readable
 effect-doctor --scope changed            # only files changed vs main (PR mode)
 effect-doctor --scope lines --base main  # only issues on lines you touched
-effect-doctor rules                      # list all 95 rules
+effect-doctor rules                      # list all 100 rules
 effect-doctor explain no-map-returning-effect   # why + how to rewrite it
 effect-doctor rules --json               # full catalog with rewrite recipes
 effect-doctor --deep                     # merge type-aware @effect/language-service findings
@@ -43,7 +43,7 @@ rewrites, search, and category filters. `npm run gen` regenerates its data from
 
 ## Status
 
-Early but real: **95 rules live** across correctness, idiomatic, architecture,
+Early but real: **100 rules live** across correctness, idiomatic, architecture,
 performance, and v4-migration categories — every rule ships with a bad→good rewrite
 recipe (`explain`), and 120+ integration tests cover the catalog (bad patterns fire,
 clean code stays silent; example coverage is test-enforced). Rule sources: the Effect-TS
@@ -73,10 +73,13 @@ is in [docs/RULES.md](docs/RULES.md); architecture and roadmap in
   inside Effect.gen → `Effect.forEach`) is always on as info.
 - `--agent` (experimental, "agent doctor"): flags the non-Effect, non-functional patterns
   LLM agents reach for by default — `if/else` chains, ternaries, `x === "literal"` guards,
-  raw `for`/`while` loops, `let`/`var` mutation, and copy-pasted function bodies — each with
-  the clean Effect/`Match`/combinator rewrite. Defaults to `warn`; `--agent-strict` escalates
-  to `error` and exits non-zero so it can gate CI. `agent-duplicate-function` stays an info
-  suggestion regardless.
+  raw `for`/`while` loops, `let`/`var` mutation, reassignment / in-place payload mutation
+  (intermediate states), and copy-pasted function bodies — each with the clean
+  Effect/`Match`/combinator rewrite. Defaults to `warn`; `--agent-strict` escalates to `error`
+  and exits non-zero so it can gate CI. It also runs a **cross-file pass**: a repo-wide index
+  of named/bound functions flags ones that duplicate another by body (exact / fuzzy), name, or
+  shape (params + call set) — so an agent reusing context sees "this helper already exists"
+  instead of re-creating it. All duplicate/similarity findings stay info suggestions.
 - Planned: suppression comments, config file, editor extension packaging, agent
   handoff, npm distribution as per-platform binaries.
 

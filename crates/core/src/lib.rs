@@ -5,6 +5,7 @@ mod effect_imports;
 #[cfg(feature = "native")]
 mod engine;
 mod examples;
+mod fn_index;
 #[cfg(feature = "native")]
 mod git_scope;
 mod lint;
@@ -12,6 +13,7 @@ mod matchers;
 mod rules;
 mod runner;
 mod score;
+mod structural;
 #[cfg(feature = "native")]
 mod walk;
 

@@ -7,7 +7,7 @@ use serde::Serialize;
 
 use crate::diagnostics::Diagnostic;
 use crate::git_scope::{collect_diff, resolve_base, DiffInfo, ScanScope};
-use crate::lint::{lint_source_opts, LintOptions};
+use crate::lint::{analyze_source, LintOptions};
 use crate::score::{compute_score, ScoreReport};
 use crate::walk::collect_files;
 
@@ -170,10 +170,26 @@ pub fn scan(options: &ScanOptions) -> Result<ScanResult, String> {
         .collect();
 
     let effect_files = outcomes.iter().filter(|outcome| outcome.has_effect).count();
-    let mut diagnostics: Vec<Diagnostic> = outcomes
-        .into_iter()
-        .flat_map(|outcome| outcome.diagnostics)
-        .collect();
+    let mut functions: Vec<crate::fn_index::FunctionEntry> = Vec::new();
+    let mut diagnostics: Vec<Diagnostic> = Vec::new();
+    for outcome in outcomes {
+        diagnostics.extend(outcome.diagnostics);
+        functions.extend(outcome.functions);
+    }
+    if options.agent {
+        let mut cross_file = crate::fn_index::cross_file_findings(&functions);
+        if let Some(filter) = &scope_filter {
+            cross_file.retain(|diagnostic| {
+                !filter.lines_only || {
+                    let path = options.root.join(&diagnostic.file);
+                    filter.relative_path(&path).is_some_and(|relative| {
+                        filter.diff.line_is_changed(&relative, diagnostic.line)
+                    })
+                }
+            });
+        }
+        diagnostics.extend(cross_file);
+    }
     if options.deep {
         let mut deep_diagnostics = crate::deep::run_language_service(&options.root)?;
         if let Some(filter) = &scope_filter {
@@ -215,6 +231,7 @@ pub fn scan(options: &ScanOptions) -> Result<ScanResult, String> {
 struct FileOutcome {
     has_effect: bool,
     diagnostics: Vec<Diagnostic>,
+    functions: Vec<crate::fn_index::FunctionEntry>,
 }
 
 fn process_file(root: &Path, path: &Path, options: LintOptions) -> Option<FileOutcome> {
@@ -225,6 +242,7 @@ fn process_file(root: &Path, path: &Path, options: LintOptions) -> Option<FileOu
         return Some(FileOutcome {
             has_effect: false,
             diagnostics: Vec::new(),
+            functions: Vec::new(),
         });
     }
     let display_path = path
@@ -232,9 +250,10 @@ fn process_file(root: &Path, path: &Path, options: LintOptions) -> Option<FileOu
         .unwrap_or(path)
         .to_string_lossy()
         .into_owned();
-    let diagnostics = lint_source_opts(&display_path, &source, options);
+    let analysis = analyze_source(&display_path, &source, options);
     Some(FileOutcome {
         has_effect: true,
-        diagnostics,
+        diagnostics: analysis.diagnostics,
+        functions: analysis.functions,
     })
 }
