@@ -1,29 +1,28 @@
 use oxc_ast::ast::{
-    ArrowFunctionExpression, BinaryExpression, CallExpression, Class, Function, ImportDeclaration,
-    NewExpression, ReturnStatement, Statement, StaticMemberExpression, SwitchStatement,
-    TaggedTemplateExpression, ThrowStatement, TryStatement, YieldExpression,
+    ArrowFunctionExpression, BinaryExpression, CallExpression, Class, ConditionalExpression,
+    Function, IfStatement, ImportDeclaration, NewExpression, ReturnStatement, Statement,
+    StaticMemberExpression, SwitchStatement, TaggedTemplateExpression, ThrowStatement,
+    TryStatement, VariableDeclaration, YieldExpression,
 };
 use oxc_span::Span;
 
-use crate::diagnostics::{RawDiagnostic, RuleMeta};
+use crate::diagnostics::{RawDiagnostic, RuleMeta, Severity};
 use crate::effect_imports::EffectImports;
 
 mod adopt;
+mod agent_hygiene;
 mod catch_idioms;
-mod interruption;
 mod composition_limits;
-mod gen_shape;
 mod concurrency_idioms;
 mod equality_idioms;
 mod error_modeling;
+mod gen_shape;
 mod globals_in_effect;
 mod idiom_shortcuts;
+mod interruption;
 mod literal_idioms;
 mod logging_security;
 mod map_misuse;
-mod promise_interop;
-mod run_sync_async;
-mod stream_hygiene;
 mod meaningful_span_names;
 mod no_chained_provides;
 mod no_effect_do;
@@ -42,11 +41,14 @@ mod prefer_it_effect;
 mod prefer_node_counterparts;
 mod prefer_random_service;
 mod prefer_tagged_error_classes;
+mod promise_interop;
 mod require_yield_star;
 mod retry_only_retryable;
+mod run_sync_async;
 mod schedule_hygiene;
 mod schema_class_hygiene;
 mod schema_usage;
+mod stream_hygiene;
 mod v4_imports;
 mod v4_no_gen_adapter;
 mod v4_renames;
@@ -68,6 +70,12 @@ pub struct Scratch {
     pub exponential_spans: Vec<Span>,
     pub has_schedule_jitter: bool,
     pub has_schedule_cap: bool,
+    /// `(structural fingerprint, span)` per non-trivial function body — the
+    /// agent-hygiene duplicate detector flags repeated fingerprints at file end.
+    pub fn_fingerprints: Vec<(u64, Span)>,
+    /// Spans of `else if` links already covered by a reported chain head, so
+    /// the agent if/else rule reports each chain exactly once.
+    pub if_chain_skip: Vec<u32>,
 }
 
 /// Per-file context handed to rules: import provenance, the function-frame
@@ -79,10 +87,18 @@ pub struct FileCtx {
     pub raw: Vec<RawDiagnostic>,
     v4_active: bool,
     adopt_active: bool,
+    agent_active: bool,
+    agent_strict: bool,
 }
 
 impl FileCtx {
-    pub fn new(imports: EffectImports, v4_active: bool, adopt_active: bool) -> Self {
+    pub fn new(
+        imports: EffectImports,
+        v4_active: bool,
+        adopt_active: bool,
+        agent_active: bool,
+        agent_strict: bool,
+    ) -> Self {
         FileCtx {
             imports,
             stack: Vec::new(),
@@ -90,6 +106,8 @@ impl FileCtx {
             raw: Vec::new(),
             v4_active,
             adopt_active,
+            agent_active,
+            agent_strict,
         }
     }
 
@@ -116,11 +134,29 @@ impl FileCtx {
         self.adopt_active
     }
 
+    /// Experimental agent-hygiene rules fire only under --agent (or --agent-strict).
+    pub fn agent_active(&self) -> bool {
+        self.agent_active
+    }
+
     pub fn report(&mut self, meta: &'static RuleMeta, span: Span, message: String) {
         self.raw.push(RawDiagnostic {
             meta,
             span,
             message,
+            severity: None,
+        });
+    }
+
+    /// Report an agent-hygiene finding, escalating its severity to `error`
+    /// when `--agent-strict` is set (otherwise the rule's declared `warn`).
+    pub fn report_agent(&mut self, meta: &'static RuleMeta, span: Span, message: String) {
+        let severity = self.agent_strict.then_some(Severity::Error);
+        self.raw.push(RawDiagnostic {
+            meta,
+            span,
+            message,
+            severity,
         });
     }
 }
@@ -138,6 +174,9 @@ pub trait Rule: Sync {
     fn on_member(&self, _member: &StaticMemberExpression<'_>, _ctx: &mut FileCtx) {}
     fn on_binary(&self, _binary: &BinaryExpression<'_>, _ctx: &mut FileCtx) {}
     fn on_switch(&self, _switch_stmt: &SwitchStatement<'_>, _ctx: &mut FileCtx) {}
+    fn on_if(&self, _if_stmt: &IfStatement<'_>, _ctx: &mut FileCtx) {}
+    fn on_conditional(&self, _conditional: &ConditionalExpression<'_>, _ctx: &mut FileCtx) {}
+    fn on_var_decl(&self, _decl: &VariableDeclaration<'_>, _ctx: &mut FileCtx) {}
     fn on_return(&self, _return_stmt: &ReturnStatement<'_>, _ctx: &mut FileCtx) {}
     /// Any loop statement (for / for-of / for-in / while / do-while).
     fn on_loop(&self, _loop_span: Span, _body: &Statement<'_>, _ctx: &mut FileCtx) {}
@@ -154,7 +193,10 @@ pub trait Rule: Sync {
 
 /// All rule metadata across the registry, for listings and export.
 pub fn all_metas() -> Vec<&'static RuleMeta> {
-    RULES.iter().flat_map(|rule| rule.metas().iter().copied()).collect()
+    RULES
+        .iter()
+        .flat_map(|rule| rule.metas().iter().copied())
+        .collect()
 }
 
 pub static RULES: &[&(dyn Rule + Send + Sync)] = &[
@@ -206,4 +248,6 @@ pub static RULES: &[&(dyn Rule + Send + Sync)] = &[
     &v4_imports::V4Imports,
     // adoption (experimental, --adopt; prefer-foreach-over-yield-loop is always on)
     &adopt::Adopt,
+    // agent hygiene (experimental, --agent)
+    &agent_hygiene::AgentHygiene,
 ];

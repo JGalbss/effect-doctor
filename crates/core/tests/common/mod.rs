@@ -2,10 +2,46 @@
 // different subset of helpers.
 #![allow(dead_code)]
 
-use effect_doctor_core::{lint_source, lint_source_with, Diagnostic};
+use effect_doctor_core::{
+    lint_source, lint_source_opts, lint_source_with, Diagnostic, LintOptions,
+};
 
 pub fn lint(source: &str) -> Vec<Diagnostic> {
     lint_source("src/example.ts", source, false)
+}
+
+pub fn lint_agent(source: &str) -> Vec<Diagnostic> {
+    lint_source_opts(
+        "src/example.ts",
+        source,
+        LintOptions {
+            agent: true,
+            ..LintOptions::default()
+        },
+    )
+}
+
+pub fn lint_agent_strict(source: &str) -> Vec<Diagnostic> {
+    lint_source_opts(
+        "src/example.ts",
+        source,
+        LintOptions {
+            agent: true,
+            agent_strict: true,
+            ..LintOptions::default()
+        },
+    )
+}
+
+#[track_caller]
+pub fn assert_fires_agent(source: &str, rule: &str, times: usize) {
+    let diagnostics = lint_agent(source);
+    let found = count(&diagnostics, rule);
+    assert_eq!(
+        found, times,
+        "expected `{rule}` to fire {times}x under --agent, fired {found}x.\nall: {:#?}\nsource:\n{source}",
+        diagnostics
+    );
 }
 
 pub fn lint_v4(source: &str) -> Vec<Diagnostic> {

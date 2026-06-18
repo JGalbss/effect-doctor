@@ -9,7 +9,10 @@ fn every_rule_has_a_rewrite_example() {
         .map(|meta| meta.id)
         .filter(|id| example_for(id).is_none())
         .collect();
-    assert!(missing.is_empty(), "rules without rewrite examples: {missing:?}");
+    assert!(
+        missing.is_empty(),
+        "rules without rewrite examples: {missing:?}"
+    );
 }
 
 #[test]
@@ -28,5 +31,5 @@ fn rule_ids_are_unique() {
 fn catalog_size_matches_expectation() {
     // Bump deliberately when adding rules — catches metas() lists that were
     // not updated when a new RuleMeta was added to a file.
-    assert_eq!(all_metas().len(), 89);
+    assert_eq!(all_metas().len(), 95);
 }

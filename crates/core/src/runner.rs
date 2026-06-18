@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 
 use oxc_ast::ast::{
-    ArrowFunctionExpression, BinaryExpression, CallExpression, Class, DoWhileStatement,
-    Expression, ForInStatement, ForOfStatement, ForStatement, Function, ImportDeclaration,
-    NewExpression, Program, ReturnStatement, StaticMemberExpression, SwitchStatement,
-    TaggedTemplateExpression, ThrowStatement, TryStatement, WhileStatement, YieldExpression,
+    ArrowFunctionExpression, BinaryExpression, CallExpression, Class, ConditionalExpression,
+    DoWhileStatement, Expression, ForInStatement, ForOfStatement, ForStatement, Function,
+    IfStatement, ImportDeclaration, NewExpression, Program, ReturnStatement,
+    StaticMemberExpression, SwitchStatement, TaggedTemplateExpression, ThrowStatement,
+    TryStatement, VariableDeclaration, WhileStatement, YieldExpression,
 };
 use oxc_ast_visit::{walk, Visit};
 use oxc_syntax::scope::ScopeFlags;
@@ -24,9 +25,15 @@ pub struct Runner {
 }
 
 impl Runner {
-    pub fn new(imports: EffectImports, v4_active: bool, adopt_active: bool) -> Self {
+    pub fn new(
+        imports: EffectImports,
+        v4_active: bool,
+        adopt_active: bool,
+        agent_active: bool,
+        agent_strict: bool,
+    ) -> Self {
         Runner {
-            ctx: FileCtx::new(imports, v4_active, adopt_active),
+            ctx: FileCtx::new(imports, v4_active, adopt_active, agent_active, agent_strict),
             marked: HashMap::new(),
         }
     }
@@ -51,7 +58,8 @@ impl Runner {
 
     fn mark_call_arguments(&mut self, call: &CallExpression) {
         for generator in effect_gen_generators(call, &self.ctx.imports) {
-            self.marked.insert(generator.span.start, FrameKind::EffectGen);
+            self.marked
+                .insert(generator.span.start, FrameKind::EffectGen);
         }
         if effect_member_prop(call, &self.ctx.imports).is_none() {
             return;
@@ -160,6 +168,27 @@ impl<'a> Visit<'a> for Runner {
             rule.on_switch(switch_stmt, &mut self.ctx);
         }
         walk::walk_switch_statement(self, switch_stmt);
+    }
+
+    fn visit_if_statement(&mut self, if_stmt: &IfStatement<'a>) {
+        for rule in self.rules() {
+            rule.on_if(if_stmt, &mut self.ctx);
+        }
+        walk::walk_if_statement(self, if_stmt);
+    }
+
+    fn visit_conditional_expression(&mut self, conditional: &ConditionalExpression<'a>) {
+        for rule in self.rules() {
+            rule.on_conditional(conditional, &mut self.ctx);
+        }
+        walk::walk_conditional_expression(self, conditional);
+    }
+
+    fn visit_variable_declaration(&mut self, decl: &VariableDeclaration<'a>) {
+        for rule in self.rules() {
+            rule.on_var_decl(decl, &mut self.ctx);
+        }
+        walk::walk_variable_declaration(self, decl);
     }
 
     fn visit_static_member_expression(&mut self, member: &StaticMemberExpression<'a>) {

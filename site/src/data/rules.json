@@ -710,5 +710,53 @@
     "help": "A loop of yields inside Effect.gen works, but Effect.forEach / Effect.all make concurrency explicit and tunable, and keep interruption semantics obvious.",
     "id": "prefer-foreach-over-yield-loop",
     "severity": "info"
+  },
+  {
+    "bad": "let label\nif (level === \"error\") {\n  label = \"!\"\n} else if (level === \"warn\") {\n  label = \"?\"\n} else {\n  label = \".\"\n}",
+    "category": "Agent hygiene",
+    "good": "const label = Match.value(level).pipe(\n  Match.when(\"error\", () => \"!\"),\n  Match.when(\"warn\", () => \"?\"),\n  Match.orElse(() => \".\")\n)",
+    "help": "if/else (and else-if) chains hide branching. Prefer early returns, a lookup map, or Match.value(...).pipe(Match.when(...), Match.exhaustive) for declarative, exhaustive dispatch.",
+    "id": "agent-no-if-else-chain",
+    "severity": "warn"
+  },
+  {
+    "bad": "const tone = percent >= 100 ? \"critical\" : percent >= 80 ? \"warning\" : \"neutral\"",
+    "category": "Agent hygiene",
+    "good": "const tone = Match.value(percent).pipe(\n  Match.when((p) => p >= 100, () => \"critical\"),\n  Match.when((p) => p >= 80, () => \"warning\"),\n  Match.orElse(() => \"neutral\")\n)",
+    "help": "Ternaries hide branching. Extract a named helper, or use Match.value(...).pipe(Match.when(...), Match.orElse(...)) so each branch is named and exhaustive.",
+    "id": "agent-no-ternary",
+    "severity": "warn"
+  },
+  {
+    "bad": "if (value.kind === \"user\") {\n  return renderUser(value)\n}",
+    "category": "Agent hygiene",
+    "good": "if (isUser(value)) {\n  return renderUser(value)\n}\n// or: Match.value(value).pipe(Match.tag(\"user\", renderUser), ...)",
+    "help": "Comparing against a string literal (`x === \"user\"`) is a stringly-typed guard. Use a type guard / predicate (isUser(x)) or Match.when on a tagged value for exhaustiveness.",
+    "id": "agent-no-string-equality-guard",
+    "severity": "warn"
+  },
+  {
+    "bad": "const rowsByScope = new Map()\nfor (const row of rows) {\n  const list = rowsByScope.get(row.scopeId) ?? []\n  list.push(row)\n  rowsByScope.set(row.scopeId, list)\n}",
+    "category": "Agent hygiene",
+    "good": "const rowsByScope = Array.groupBy(rows, (row) => row.scopeId)\n// effectful: yield* Effect.forEach(rows, persistRow, { concurrency: 5 })",
+    "help": "Raw for/while loops mutate and obscure intent. Use Array combinators (map/filter/reduce) for pure data, or Effect.forEach / Effect.reduce for effectful iteration (concurrency + interruption included).",
+    "id": "agent-no-raw-loop",
+    "severity": "warn"
+  },
+  {
+    "bad": "let softCeiling = 0\nif (hasSoft) {\n  softCeiling = softCap + freeAllowance\n}",
+    "category": "Agent hygiene",
+    "good": "const softCeiling = hasSoft ? softCap + freeAllowance : 0\n// better: const softCeiling = Option.match(soft, { onNone: () => 0, onSome: (c) => c + freeAllowance })",
+    "help": "`let`/`var` signal mutation. Bind with `const` and build values functionally — Array.reduce, Match for conditional values, or an Effect pipeline instead of reassigning.",
+    "id": "agent-no-let",
+    "severity": "warn"
+  },
+  {
+    "bad": "const usageBarFill = (p) => p >= 100 ? red : p >= 80 ? amber : gray\nconst usageText = (p) => p >= 100 ? red : p >= 80 ? amber : gray // copy-paste",
+    "category": "Agent hygiene",
+    "good": "const usageTone = (p) => p >= 100 ? red : p >= 80 ? amber : gray\nconst usageBarFill = usageTone\nconst usageText = usageTone",
+    "help": "Two functions in this file share a structurally identical body — agents copy-paste instead of extracting. Hoist the shared logic into one reusable helper.",
+    "id": "agent-duplicate-function",
+    "severity": "info"
   }
 ]

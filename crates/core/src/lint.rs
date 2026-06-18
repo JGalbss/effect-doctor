@@ -28,10 +28,31 @@ pub(crate) fn classify_file(path: &str) -> FileContext {
     FileContext::Production
 }
 
+/// Toggles for the optional rule tiers layered on top of the always-on
+/// syntactic rules. `Default` is the plain production scan.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct LintOptions {
+    /// Run v4-migration rules even on an effect v3 codebase.
+    pub v4_active: bool,
+    /// Experimental: vanilla-TS → Effect adoption recommendations.
+    pub adopt: bool,
+    /// Experimental: agent-hygiene rules (if/else, ternary, raw loops, …).
+    pub agent: bool,
+    /// Escalate agent-hygiene findings from `warn` to `error` (implies `agent`).
+    pub agent_strict: bool,
+}
+
 /// Lint a single source text. Public so tests and the LSP host can lint
 /// snippets without touching the filesystem.
 pub fn lint_source(display_path: &str, source: &str, v4_active: bool) -> Vec<Diagnostic> {
-    lint_source_with(display_path, source, v4_active, false)
+    lint_source_opts(
+        display_path,
+        source,
+        LintOptions {
+            v4_active,
+            ..LintOptions::default()
+        },
+    )
 }
 
 /// `lint_source` with the experimental adoption rules toggled.
@@ -41,6 +62,19 @@ pub fn lint_source_with(
     v4_active: bool,
     adopt: bool,
 ) -> Vec<Diagnostic> {
+    lint_source_opts(
+        display_path,
+        source,
+        LintOptions {
+            v4_active,
+            adopt,
+            ..LintOptions::default()
+        },
+    )
+}
+
+/// Lint with the full set of optional tiers selected via [`LintOptions`].
+pub fn lint_source_opts(display_path: &str, source: &str, options: LintOptions) -> Vec<Diagnostic> {
     let allocator = Allocator::default();
     let source_type =
         SourceType::from_path(Path::new(display_path)).unwrap_or_else(|_| SourceType::ts());
@@ -52,7 +86,15 @@ pub fn lint_source_with(
     if !imports.has_any() {
         return Vec::new();
     }
-    let ctx = Runner::new(imports, v4_active, adopt).run(&parsed.program);
+    let agent_active = options.agent || options.agent_strict;
+    let ctx = Runner::new(
+        imports,
+        options.v4_active,
+        options.adopt,
+        agent_active,
+        options.agent_strict,
+    )
+    .run(&parsed.program);
     finalize(source, display_path, classify_file(display_path), ctx.raw)
 }
 
@@ -90,7 +132,7 @@ fn finalize(
                 .unwrap_or(source.len());
             Diagnostic {
                 rule: diagnostic.meta.id,
-                severity: diagnostic.meta.severity,
+                severity: diagnostic.severity.unwrap_or(diagnostic.meta.severity),
                 category: diagnostic.meta.category,
                 message: diagnostic.message,
                 help: diagnostic.meta.help,

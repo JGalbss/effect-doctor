@@ -30,7 +30,11 @@ impl From<ScopeArg> for ScanScope {
 }
 
 #[derive(Parser)]
-#[command(name = "effect-doctor", version, about = "Health checks for Effect TS codebases")]
+#[command(
+    name = "effect-doctor",
+    version,
+    about = "Health checks for Effect TS codebases"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
@@ -71,6 +75,16 @@ struct Cli {
     /// .then chains, Promise.all, awaits in loops)
     #[arg(long)]
     adopt: bool,
+
+    /// Experimental "agent doctor": flag non-Effect slop LLM agents emit —
+    /// if/else chains, ternaries, string-equality guards, raw loops, `let`,
+    /// duplicated function bodies (warn)
+    #[arg(long)]
+    agent: bool,
+
+    /// Escalate --agent findings to errors (hard-fail). Implies --agent.
+    #[arg(long)]
+    agent_strict: bool,
 }
 
 mod lsp;
@@ -198,6 +212,8 @@ fn main() -> ExitCode {
         base: cli.base.clone(),
         deep: cli.deep,
         adopt: cli.adopt,
+        agent: cli.agent || cli.agent_strict,
+        agent_strict: cli.agent_strict,
     }) {
         Ok(result) => result,
         Err(message) => {
@@ -207,11 +223,31 @@ fn main() -> ExitCode {
     };
 
     if cli.json {
-        println!("{}", serde_json::to_string_pretty(&result).expect("serializable report"));
-        return ExitCode::SUCCESS;
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&result).expect("serializable report")
+        );
+        return exit_code(&result, cli.agent_strict);
     }
 
     render(&result, cli.verbose, cli.max_locations);
+    exit_code(&result, cli.agent_strict)
+}
+
+/// `--agent-strict` turns the scan into a gate: any error-severity finding
+/// (its own escalated rules included) fails the process. Without it the scan
+/// stays report-only and always exits 0.
+fn exit_code(result: &ScanResult, agent_strict: bool) -> ExitCode {
+    if !agent_strict {
+        return ExitCode::SUCCESS;
+    }
+    let has_error = result
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.severity == Severity::Error);
+    if has_error {
+        return ExitCode::FAILURE;
+    }
     ExitCode::SUCCESS
 }
 
@@ -324,7 +360,11 @@ fn render(result: &ScanResult, verbose: bool, max_locations: usize) {
         (severity_a, std::cmp::Reverse(a.1.len())).cmp(&(severity_b, std::cmp::Reverse(b.1.len())))
     });
 
-    let shown_groups = if verbose { ordered.len() } else { ordered.len().min(3) };
+    let shown_groups = if verbose {
+        ordered.len()
+    } else {
+        ordered.len().min(3)
+    };
     for (rule, diagnostics) in ordered.iter().take(shown_groups) {
         let severity = diagnostics[0].severity;
         let severity_paint = severity_color(p, severity);

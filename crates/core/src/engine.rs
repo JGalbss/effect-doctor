@@ -7,7 +7,7 @@ use serde::Serialize;
 
 use crate::diagnostics::Diagnostic;
 use crate::git_scope::{collect_diff, resolve_base, DiffInfo, ScanScope};
-use crate::lint::lint_source_with;
+use crate::lint::{lint_source_opts, LintOptions};
 use crate::score::{compute_score, ScoreReport};
 use crate::walk::collect_files;
 
@@ -22,6 +22,10 @@ pub struct ScanOptions {
     pub deep: bool,
     /// Experimental: vanilla-TS-to-Effect adoption recommendations.
     pub adopt: bool,
+    /// Experimental: agent-hygiene rules (if/else, ternary, raw loops, …).
+    pub agent: bool,
+    /// Escalate agent-hygiene findings from `warn` to `error`.
+    pub agent_strict: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -151,7 +155,13 @@ pub fn scan(options: &ScanOptions) -> Result<ScanResult, String> {
     let outcomes: Vec<FileOutcome> = files
         .par_iter()
         .filter_map(|path| {
-            let mut outcome = process_file(&options.root, path, v4_active, options.adopt)?;
+            let lint_options = LintOptions {
+                v4_active,
+                adopt: options.adopt,
+                agent: options.agent,
+                agent_strict: options.agent_strict,
+            };
+            let mut outcome = process_file(&options.root, path, lint_options)?;
             if let Some(filter) = &scope_filter {
                 filter.retain_diagnostics(path, &mut outcome.diagnostics);
             }
@@ -171,19 +181,21 @@ pub fn scan(options: &ScanOptions) -> Result<ScanResult, String> {
                 let path = options.root.join(&diagnostic.file);
                 filter.includes_file(&path)
                     && (!filter.lines_only || {
-                        filter
-                            .relative_path(&path)
-                            .is_some_and(|relative| {
-                                filter.diff.line_is_changed(&relative, diagnostic.line)
-                            })
+                        filter.relative_path(&path).is_some_and(|relative| {
+                            filter.diff.line_is_changed(&relative, diagnostic.line)
+                        })
                     })
             });
         }
         diagnostics.extend(deep_diagnostics);
     }
     diagnostics.sort_by(|a, b| {
-        (a.severity, a.rule, a.file.as_str(), a.line)
-            .cmp(&(b.severity, b.rule, b.file.as_str(), b.line))
+        (a.severity, a.rule, a.file.as_str(), a.line).cmp(&(
+            b.severity,
+            b.rule,
+            b.file.as_str(),
+            b.line,
+        ))
     });
 
     let score = compute_score(&diagnostics);
@@ -193,9 +205,7 @@ pub fn scan(options: &ScanOptions) -> Result<ScanResult, String> {
         effect_major,
         v4_rules_active: v4_active,
         scope: scope_label(options.scope),
-        changed_files: scope_filter
-            .as_ref()
-            .map(|filter| filter.diff.files.len()),
+        changed_files: scope_filter.as_ref().map(|filter| filter.diff.files.len()),
         diagnostics,
         duration_ms: started.elapsed().as_millis() as u64,
         score,
@@ -207,7 +217,7 @@ struct FileOutcome {
     diagnostics: Vec<Diagnostic>,
 }
 
-fn process_file(root: &Path, path: &Path, v4_active: bool, adopt: bool) -> Option<FileOutcome> {
+fn process_file(root: &Path, path: &Path, options: LintOptions) -> Option<FileOutcome> {
     let source = fs::read_to_string(path).ok()?;
     // Fast pre-filter: every rule today requires an effect import; skip the
     // parse entirely for files that cannot mention one.
@@ -222,7 +232,7 @@ fn process_file(root: &Path, path: &Path, v4_active: bool, adopt: bool) -> Optio
         .unwrap_or(path)
         .to_string_lossy()
         .into_owned();
-    let diagnostics = lint_source_with(&display_path, &source, v4_active, adopt);
+    let diagnostics = lint_source_opts(&display_path, &source, options);
     Some(FileOutcome {
         has_effect: true,
         diagnostics,

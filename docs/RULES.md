@@ -138,6 +138,23 @@ All AST-matchable by name + import provenance; profile-gated (only fire for v4 t
 | `v4-context-reference-shape` | `Context.Reference<Self>()(id, {defaultValue})` class form → value form |
 | `v4-unstable-import-awareness` | report `effect/unstable/*` imports (info) |
 
+## Agent hygiene (experimental, `--agent`)
+
+"Agent doctor" — the non-Effect, non-functional patterns LLM agents reach for by default,
+each of which has a cleaner Effect / `Match` / combinator form. The whole family is opt-in
+(`--agent`) and defaults to `warn`; `--agent-strict` escalates each to `error` and makes the
+CLI exit non-zero (CI gate). `agent-duplicate-function` stays `info` regardless — it's a
+refactor suggestion, not a violation. All AST-only; fire file-wide in any file importing effect.
+
+| id | sev | det | summary |
+|---|---|---|---|
+| `agent-no-if-else-chain` | warn | AST | `if … else if … else` chain (reported once per chain) → early returns / lookup map / `Match.exhaustive` |
+| `agent-no-ternary` | warn | AST | conditional `?:` expression → named helper or `Match.when`/`orElse` |
+| `agent-no-string-equality-guard` | warn | AST | `x === "literal"` stringly-typed guard → type guard/predicate (`isX`) or `Match.when` (`_tag` deferred to `no-tag-string-comparison`) |
+| `agent-no-raw-loop` | warn | AST | raw `for`/`for-of`/`for-in`/`while`/`do-while` → `Array.map/filter/reduce` or `Effect.forEach`/`Effect.reduce` |
+| `agent-no-let` | warn | AST | `let`/`var` mutation → `const` + functional construction (reduce/Match/pipeline) |
+| `agent-duplicate-function` | info | AST | two functions in one file with a structurally identical body (renamed copy-paste) → extract a shared helper |
+
 ## Scoring surfaces
 
 Following react-doctor: every diagnostic carries surfaces (`cli`, `prComment`, `score`,

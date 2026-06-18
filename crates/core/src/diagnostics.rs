@@ -28,6 +28,10 @@ pub enum Category {
     TypeAware,
     /// `--adopt` (experimental): vanilla TS that should migrate to Effect.
     Adoption,
+    /// `--agent` (experimental): non-Effect "slop" patterns LLM agents emit
+    /// (if/else chains, ternaries, string-equality guards, raw loops, `let`,
+    /// duplicated function bodies) that have a cleaner Effect/functional form.
+    AgentHygiene,
 }
 
 impl Category {
@@ -40,6 +44,7 @@ impl Category {
             Category::V4Migration => "v4 Migration",
             Category::TypeAware => "Type-aware",
             Category::Adoption => "Effect Adoption",
+            Category::AgentHygiene => "Agent hygiene",
         }
     }
 }
@@ -59,6 +64,9 @@ pub struct RawDiagnostic {
     pub meta: &'static RuleMeta,
     pub span: Span,
     pub message: String,
+    /// When set, overrides `meta.severity` for this single finding — used by
+    /// the `--agent` family to escalate to `error` under `--agent-strict`.
+    pub severity: Option<Severity>,
 }
 
 #[derive(Debug, Clone, Serialize)]

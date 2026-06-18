@@ -371,6 +371,31 @@ pub fn example_for(rule: &str) -> Option<RuleExample> {
             "Effect.gen(function* () {\n  for (const id of ids) {\n    yield* processUser(id)\n  }\n})",
             "Effect.forEach(ids, (id) => processUser(id), { concurrency: 5 })\n// or { concurrency: 1 } to stay sequential — but explicit",
         ),
+        // ─── agent hygiene (experimental, --agent) ───
+        "agent-no-if-else-chain" => (
+            "let label\nif (level === \"error\") {\n  label = \"!\"\n} else if (level === \"warn\") {\n  label = \"?\"\n} else {\n  label = \".\"\n}",
+            "const label = Match.value(level).pipe(\n  Match.when(\"error\", () => \"!\"),\n  Match.when(\"warn\", () => \"?\"),\n  Match.orElse(() => \".\")\n)",
+        ),
+        "agent-no-ternary" => (
+            "const tone = percent >= 100 ? \"critical\" : percent >= 80 ? \"warning\" : \"neutral\"",
+            "const tone = Match.value(percent).pipe(\n  Match.when((p) => p >= 100, () => \"critical\"),\n  Match.when((p) => p >= 80, () => \"warning\"),\n  Match.orElse(() => \"neutral\")\n)",
+        ),
+        "agent-no-string-equality-guard" => (
+            "if (value.kind === \"user\") {\n  return renderUser(value)\n}",
+            "if (isUser(value)) {\n  return renderUser(value)\n}\n// or: Match.value(value).pipe(Match.tag(\"user\", renderUser), ...)",
+        ),
+        "agent-no-raw-loop" => (
+            "const rowsByScope = new Map()\nfor (const row of rows) {\n  const list = rowsByScope.get(row.scopeId) ?? []\n  list.push(row)\n  rowsByScope.set(row.scopeId, list)\n}",
+            "const rowsByScope = Array.groupBy(rows, (row) => row.scopeId)\n// effectful: yield* Effect.forEach(rows, persistRow, { concurrency: 5 })",
+        ),
+        "agent-no-let" => (
+            "let softCeiling = 0\nif (hasSoft) {\n  softCeiling = softCap + freeAllowance\n}",
+            "const softCeiling = hasSoft ? softCap + freeAllowance : 0\n// better: const softCeiling = Option.match(soft, { onNone: () => 0, onSome: (c) => c + freeAllowance })",
+        ),
+        "agent-duplicate-function" => (
+            "const usageBarFill = (p) => p >= 100 ? red : p >= 80 ? amber : gray\nconst usageText = (p) => p >= 100 ? red : p >= 80 ? amber : gray // copy-paste",
+            "const usageTone = (p) => p >= 100 ? red : p >= 80 ? amber : gray\nconst usageBarFill = usageTone\nconst usageText = usageTone",
+        ),
         _ => return None,
     };
     Some(RuleExample { bad, good })

@@ -23,13 +23,16 @@ effect-doctor <dir>                      # scan everything
 effect-doctor <dir> --verbose --json     # full report / machine-readable
 effect-doctor --scope changed            # only files changed vs main (PR mode)
 effect-doctor --scope lines --base main  # only issues on lines you touched
-effect-doctor rules                      # list all 76 rules
+effect-doctor rules                      # list all 95 rules
 effect-doctor explain no-map-returning-effect   # why + how to rewrite it
 effect-doctor rules --json               # full catalog with rewrite recipes
 effect-doctor --deep                     # merge type-aware @effect/language-service findings
 effect-doctor lsp                        # run as a language server (editor diagnostics)
 effect-doctor --adopt --scope lines      # experimental: vanilla-TS → Effect migration
                                          # recommendations, on exactly your PR's lines
+effect-doctor --agent                    # experimental "agent doctor": flag the non-Effect
+                                         # slop LLM agents emit (if/else, ternaries, raw loops…)
+effect-doctor --agent-strict             # same, but escalate to errors and exit non-zero (CI gate)
 ```
 
 ## Docs site
@@ -40,7 +43,7 @@ rewrites, search, and category filters. `npm run gen` regenerates its data from
 
 ## Status
 
-Early but real: **76 rules live** across correctness, idiomatic, architecture,
+Early but real: **95 rules live** across correctness, idiomatic, architecture,
 performance, and v4-migration categories — every rule ships with a bad→good rewrite
 recipe (`explain`), and 120+ integration tests cover the catalog (bad patterns fire,
 clean code stays silent; example coverage is test-enforced). Rule sources: the Effect-TS
@@ -68,6 +71,12 @@ is in [docs/RULES.md](docs/RULES.md); architecture and roadmap in
   functions, `.then()` chains, `new Promise`, `Promise.all`, sequential awaits in loops —
   each with the clean Effect rewrite. `prefer-foreach-over-yield-loop` (yield loops
   inside Effect.gen → `Effect.forEach`) is always on as info.
+- `--agent` (experimental, "agent doctor"): flags the non-Effect, non-functional patterns
+  LLM agents reach for by default — `if/else` chains, ternaries, `x === "literal"` guards,
+  raw `for`/`while` loops, `let`/`var` mutation, and copy-pasted function bodies — each with
+  the clean Effect/`Match`/combinator rewrite. Defaults to `warn`; `--agent-strict` escalates
+  to `error` and exits non-zero so it can gate CI. `agent-duplicate-function` stays an info
+  suggestion regardless.
 - Planned: suppression comments, config file, editor extension packaging, agent
   handoff, npm distribution as per-platform binaries.
 
