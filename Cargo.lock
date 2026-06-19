@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "agent-doctor"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "agent_doctor_core",
  "anstyle",
@@ -16,7 +16,7 @@ dependencies = [
 
 [[package]]
 name = "agent_doctor_core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "ignore",
  "oxc_allocator",
@@ -33,7 +33,7 @@ dependencies = [
 
 [[package]]
 name = "agent_doctor_wasm"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "agent_doctor_core",
  "serde_json",

@@ -1,6 +1,6 @@
 {
-  "name": "agent-doctor",
-  "version": "0.1.0",
+  "name": "@jgalbsss/agent-doctor",
+  "version": "0.1.1",
   "description": "Agent doctor for Effect TS — catch the slop LLM agents write, score 0-100, and get the clean Effect rewrite for every finding. Rust-fast.",
   "keywords": ["effect", "effect-ts", "lint", "linter", "static-analysis", "doctor", "agent", "ai", "llm"],
   "license": "MIT",
@@ -13,14 +13,17 @@
     "agent-doctor": "bin/agent-doctor.js"
   },
   "files": ["bin"],
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=18"
   },
   "optionalDependencies": {
-    "agent-doctor-darwin-arm64": "0.1.0",
-    "agent-doctor-darwin-x64": "0.1.0",
-    "agent-doctor-linux-arm64": "0.1.0",
-    "agent-doctor-linux-x64": "0.1.0",
-    "agent-doctor-windows-x64": "0.1.0"
+    "@jgalbsss/agent-doctor-darwin-arm64": "0.1.1",
+    "@jgalbsss/agent-doctor-darwin-x64": "0.1.1",
+    "@jgalbsss/agent-doctor-linux-arm64": "0.1.1",
+    "@jgalbsss/agent-doctor-linux-x64": "0.1.1",
+    "@jgalbsss/agent-doctor-windows-x64": "0.1.1"
   }
 }

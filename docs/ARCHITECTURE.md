@@ -53,7 +53,7 @@ don't need a server for v1).
 
 ### Product surface (sequenced)
 
-1. `npx agent-doctor` / `agent-doctor [dir]` — scan, animated score, grouped report
+1. `npx @jgalbsss/agent-doctor` / `agent-doctor [dir]` — scan, animated score, grouped report
    (top 3 rule groups, `--verbose` for all), code frames, `--json` (versioned schema).
 2. Scopes: `--scope full|files|changed|lines` + `--base <ref>` with content-hash
    fingerprint baseline (react-doctor's `compute-diagnostic-delta` model) for CI deltas.

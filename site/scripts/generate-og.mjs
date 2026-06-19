@@ -13,7 +13,7 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630">
   <text x="80" y="500" font-family="Helvetica, Arial, sans-serif" font-size="34" fill="#7d8799">Scan your Effect TS codebase. Get a score.</text>
   <text x="80" y="550" font-family="Helvetica, Arial, sans-serif" font-size="34" fill="#7d8799">89 rules, every one with the cleaner rewrite.</text>
   <rect x="80" y="575" width="330" height="0" fill="none"/>
-  <text x="1120" y="560" text-anchor="end" font-family="Menlo, monospace" font-size="30" fill="#7ee2a8">npx agent-doctor</text>
+  <text x="1120" y="560" text-anchor="end" font-family="Menlo, monospace" font-size="30" fill="#7ee2a8">npx @jgalbsss/agent-doctor</text>
 </svg>`
 
 const png = new Resvg(svg, { fitTo: { mode: "width", value: 1200 } }).render().asPng()

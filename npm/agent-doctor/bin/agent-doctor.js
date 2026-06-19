@@ -4,9 +4,9 @@
 const { spawnSync } = require("node:child_process")
 
 // npm's spam filter rejects "win32" in package names, so Windows ships as
-// agent-doctor-windows-x64.
+// @jgalbsss/agent-doctor-windows-x64.
 const platformName = process.platform === "win32" ? "windows" : process.platform
-const platformPackage = `agent-doctor-${platformName}-${process.arch}`
+const platformPackage = `@jgalbsss/agent-doctor-${platformName}-${process.arch}`
 const binaryName = process.platform === "win32" ? "agent-doctor.exe" : "agent-doctor"
 
 let binaryPath

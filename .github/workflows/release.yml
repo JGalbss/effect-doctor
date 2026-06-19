@@ -1,5 +1,5 @@
 # Publish to npm on tag push (v*): per-platform binary packages + the
-# `agent-doctor` launcher package. Requires the NPM_TOKEN repo secret.
+# `@jgalbsss/agent-doctor` launcher package. Requires the NPM_TOKEN repo secret.
 name: release
 on:
   push:
@@ -16,27 +16,27 @@ jobs:
         include:
           - target: aarch64-apple-darwin
             os: macos-14
-            npm: agent-doctor-darwin-arm64
+            npm: @jgalbsss/agent-doctor-darwin-arm64
             node_os: darwin
             node_arch: arm64
           - target: x86_64-apple-darwin
             os: macos-14
-            npm: agent-doctor-darwin-x64
+            npm: @jgalbsss/agent-doctor-darwin-x64
             node_os: darwin
             node_arch: x64
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-            npm: agent-doctor-linux-x64
+            npm: @jgalbsss/agent-doctor-linux-x64
             node_os: linux
             node_arch: x64
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-24.04-arm
-            npm: agent-doctor-linux-arm64
+            npm: @jgalbsss/agent-doctor-linux-arm64
             node_os: linux
             node_arch: arm64
           - target: x86_64-pc-windows-msvc
             os: windows-latest
-            npm: agent-doctor-windows-x64
+            npm: @jgalbsss/agent-doctor-windows-x64
             node_os: win32
             node_arch: x64
     runs-on: ${{ matrix.os }}
@@ -104,11 +104,11 @@ jobs:
             }
             fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n')
           "
-      - name: Publish agent-doctor
+      - name: Publish @jgalbsss/agent-doctor
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          if npm view "agent-doctor@$VERSION" version > /dev/null 2>&1; then
-            echo "agent-doctor@$VERSION already published — skipping"
+          if npm view "@jgalbsss/agent-doctor@$VERSION" version > /dev/null 2>&1; then
+            echo "@jgalbsss/agent-doctor@$VERSION already published — skipping"
           else
             cd npm/agent-doctor && npm publish --access public
           fi

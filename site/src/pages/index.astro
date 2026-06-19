@@ -34,7 +34,7 @@ const counts = {
           Scan your Effect TS codebase, get a score, fix what matters. {rules.length} rules,
           every one with the cleaner rewrite. Rust-fast — thousands of files in milliseconds.
         </p>
-        <pre class="install">npx agent-doctor <span class="dim"># or: agent-doctor --scope lines  (just your PR)</span><button class="copy" id="copy-install" title="Copy npx agent-doctor" aria-label="Copy">⧉</button></pre>
+        <pre class="install">npx @jgalbsss/agent-doctor <span class="dim"># or: agent-doctor --scope lines  (just your PR)</span><button class="copy" id="copy-install" title="Copy npx @jgalbsss/agent-doctor" aria-label="Copy">⧉</button></pre>
         <p class="playground-link"><a href="/playground">▶ try it in the playground</a></p>
         <div class="legend">
           <span class="sev error">{counts.error} errors</span>
@@ -117,7 +117,7 @@ const counts = {
 
       const copyButton = document.getElementById("copy-install")
       copyButton.addEventListener("click", async () => {
-        await navigator.clipboard.writeText("npx agent-doctor")
+        await navigator.clipboard.writeText("npx @jgalbsss/agent-doctor")
         copyButton.textContent = "✓"
         copyButton.classList.add("copied")
         setTimeout(() => {
