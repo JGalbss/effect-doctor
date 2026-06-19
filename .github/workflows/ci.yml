@@ -14,3 +14,14 @@ jobs:
       - run: cargo test --workspace
       - run: cargo build --release -p agent-doctor
       - run: ./target/release/agent-doctor fixtures --verbose | tail -3
+
+  latency:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release -p agent_doctor_bench
+      # Gate gross cold-build regressions against the pinned in-repo sample.
+      # Threshold is generous (CI runners are slow + tiny repos are overhead-bound).
+      - run: ./target/release/agent-doctor-bench --max-us-per-file 5000 fixtures

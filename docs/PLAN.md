@@ -204,6 +204,23 @@ Goal: reference orchestrator driving the deterministic loop. New crate `crates/o
   writing the same helper before merge. DoD: test with two stub tasks adding identical helpers
   raises the cross-draft duplicate.
 
+## Phase 6 — Agent-native VCS (design → TOOLKIT.md §agent-native VCS)
+
+Goal: our own model on a git-compatible backend — the novel agent-native layer, not a git
+rewrite. Built behind a trait so a fully-native storage engine can swap in later.
+
+- [x] **P6.1** `Vcs` trait + `GitVcs` adapter: changed-files, file-at-ref, isolated worktrees,
+  semantic `merge_file` (default method over the trait). DoD: tested vs a temp git repo.
+- [x] **P6.2** Content-addressed **operation log** (`OpLog`): agent/task attribution, parent
+  chain, monotonic seq. DoD: deterministic ids, attribution queries.
+- [x] **P6.3** Deterministic **undo / revert-task** on the op-log (jj-style, agent-scoped).
+  DoD: undo moves head back + audits; revert-task restores pre-task state.
+- [x] **P6.4** `Repo` facade: composes git storage + op-log + first-class leases + semantic
+  merge; persists under `.agent-doctor/`. DoD: snapshot/lease/undo persist and reload.
+- [ ] **P6.5** *(deferred long tail)* Fully-native storage engine (own object store / wire
+  protocol / virtual working copy) replacing the git backend — ≈ jj's 112k test-LOC of
+  correctness work. Tracked, intentionally not built; the trait makes it a drop-in later.
+
 ## Phase 7 — Benchmark / latency harness (design → bench/RESULTS.md)
 
 Goal: measure kernel latency across many real projects so regressions and scaling are visible.
@@ -213,8 +230,8 @@ Goal: measure kernel latency across many real projects so regressions and scalin
 - [x] **P7.2** `bench/run.sh`: clone a tiered set of real TS repos (zustand→zod→trpc→effect)
   into `bench/projects/` (gitignored) and run the harness. DoD: idempotent re-runs.
 - [x] **P7.3** Capture sample numbers in `bench/RESULTS.md`. DoD: table with real measurements.
-- [ ] **P7.4** Add gate (L1) and merge (L3) latency rows once those layers land.
-- [ ] **P7.5** CI job: fail if cold-build µs/file regresses beyond a threshold on a pinned repo.
+- [x] **P7.4** Add gate (L1) and merge (L3) latency rows once those layers land.
+- [x] **P7.5** CI job: fail if cold-build µs/file regresses beyond a threshold on a pinned repo.
 
 ## Milestones
 

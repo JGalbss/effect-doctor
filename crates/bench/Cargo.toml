@@ -12,3 +12,5 @@ path = "src/main.rs"
 [dependencies]
 agent_doctor_core.workspace = true
 agent_doctor_impact.workspace = true
+agent_doctor_policy.workspace = true
+agent_doctor_merge.workspace = true

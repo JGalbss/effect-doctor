@@ -187,22 +187,29 @@ fn check_layering(
     if policy.layers.is_empty() {
         return;
     }
-    for edge in graph.import_edges() {
-        if !changed.contains(edge.from.as_str()) {
+    // Resolve imports only for the *changed* files (O(changed) — not the whole
+    // repo's edges), since a gate only judges the diff.
+    for &from in changed {
+        let Some(file) = graph.file(from) else {
             continue;
-        }
-        for layer in &policy.layers {
-            if glob::matches(&layer.path, &edge.from)
-                && glob::matches_any(&layer.forbid_imports_from, &edge.to)
-            {
-                out.push(Violation {
-                    kind: ViolationKind::Layering,
-                    file: edge.from.clone(),
-                    reason: format!(
-                        "layer '{}' may not import from '{}' ({} → {})",
-                        layer.name, edge.to, edge.from, edge.to
-                    ),
-                });
+        };
+        for import in &file.imports {
+            let Some(to) = graph.resolve_import(from, &import.specifier) else {
+                continue;
+            };
+            for layer in &policy.layers {
+                if glob::matches(&layer.path, from)
+                    && glob::matches_any(&layer.forbid_imports_from, to)
+                {
+                    out.push(Violation {
+                        kind: ViolationKind::Layering,
+                        file: from.to_string(),
+                        reason: format!(
+                            "layer '{}' may not import from '{to}' ({from} → {to})",
+                            layer.name
+                        ),
+                    });
+                }
             }
         }
     }
