@@ -2,6 +2,8 @@ mod content_addr;
 #[cfg(feature = "native")]
 mod deep;
 mod diagnostics;
+#[cfg(feature = "native")]
+mod index;
 mod effect_imports;
 #[cfg(feature = "native")]
 mod engine;
@@ -27,6 +29,8 @@ pub use engine::{detect_effect_major, scan, ScanOptions, ScanResult};
 pub use examples::{example_for, RuleExample};
 #[cfg(feature = "native")]
 pub use git_scope::ScanScope;
+#[cfg(feature = "native")]
+pub use index::Index;
 pub use lint::{lint_source, lint_source_opts, lint_source_with, LintOptions};
 pub use rules::{all_metas, RULES};
 pub use score::{compute_score, ScoreReport, SCORE_GOOD_THRESHOLD, SCORE_OK_THRESHOLD};

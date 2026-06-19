@@ -84,8 +84,19 @@ impl SymbolGraph {
     /// Parse `source` and record the file's definitions and imports. Replaces
     /// any prior entry for the same path (incremental update).
     pub fn add_file(&mut self, path: &str, source: &str) {
-        let symbols = analyze_file(path, source);
-        self.files.insert(path.to_string(), symbols);
+        self.insert(SymbolGraph::analyze(path, source));
+    }
+
+    /// Parse one file into [`FileSymbols`] without inserting it — lets callers
+    /// (e.g. the [`crate::index::Index`] builder) parse files in parallel and
+    /// insert the results afterward.
+    pub fn analyze(path: &str, source: &str) -> FileSymbols {
+        analyze_file(path, source)
+    }
+
+    /// Insert pre-parsed file symbols, replacing any prior entry for its path.
+    pub fn insert(&mut self, symbols: FileSymbols) {
+        self.files.insert(symbols.path.clone(), symbols);
     }
 
     /// Drop a file from the graph (e.g. on delete).
