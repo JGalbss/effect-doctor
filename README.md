@@ -35,6 +35,32 @@ agent-doctor --agent                    # experimental "agent doctor": flag the 
 agent-doctor --agent-strict             # same, but escalate to errors and exit non-zero (CI gate)
 ```
 
+## Toolkit (experimental)
+
+Beyond the linter, agent-doctor is growing a deterministic layer around AI coding agents —
+the same Rust/oxc kernel exposed for policy, test-selection, and merge. Design:
+[docs/TOOLKIT.md](docs/TOOLKIT.md); build plan: [docs/PLAN.md](docs/PLAN.md).
+
+```sh
+agent-doctor impact --base main          # which tests reach the working diff (impact selection)
+agent-doctor gate --base main --actor a  # gate the diff vs policy/ACL/leases (deny exits non-zero)
+agent-doctor merge BASE OURS THEIRS      # semantic (AST) 3-way merge of TypeScript
+```
+
+**Semantic merge driver** — two agents adding *different* functions to the same file merge
+with zero conflict (vanilla git conflicts on the overlapping lines). Register it with git:
+
+```sh
+git config merge.agentdoctor.name   "agent-doctor semantic merge"
+git config merge.agentdoctor.driver "agent-doctor merge %O %A %B"
+echo '*.ts  merge=agentdoctor' >> .gitattributes
+echo '*.tsx merge=agentdoctor' >> .gitattributes
+```
+
+**Latency** (`bench/run.sh`, Apple Silicon, release): cold index build scales ~20µs/file
+(zod, 404 files → ~8ms); warm incremental update ~28µs; impact selection sub-µs once the
+dependency graph is warm. See [bench/RESULTS.md](bench/RESULTS.md).
+
 ## Docs site
 
 `site/` is an Astro site rendering the full rule catalog with side-by-side bad→good

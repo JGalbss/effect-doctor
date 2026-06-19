@@ -134,6 +134,21 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Semantic (AST-level) 3-way merge driver for TypeScript files
+    Merge {
+        /// Base (common ancestor) file
+        base: PathBuf,
+        /// Ours (current) file — receives the merged result unless --output
+        ours: PathBuf,
+        /// Theirs (other) file
+        theirs: PathBuf,
+        /// Write merged output here instead of overwriting <ours>
+        #[arg(long)]
+        output: Option<PathBuf>,
+        /// Print the merge result as JSON instead of writing a file
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 fn run_explain(rule_id: &str) -> ExitCode {
@@ -383,6 +398,69 @@ fn gate_exit(violations: &[agent_doctor_policy::Violation]) -> ExitCode {
     ExitCode::FAILURE
 }
 
+/// `agent-doctor merge` — semantic 3-way merge. Writes the result to `<ours>`
+/// (git merge-driver convention) or `--output`, and exits non-zero on conflict.
+fn run_merge(
+    base: &std::path::Path,
+    ours: &std::path::Path,
+    theirs: &std::path::Path,
+    output: Option<&std::path::Path>,
+    json: bool,
+) -> ExitCode {
+    let read = |path: &std::path::Path| std::fs::read_to_string(path);
+    let (base_src, ours_src, theirs_src) = match (read(base), read(ours), read(theirs)) {
+        (Ok(b), Ok(o), Ok(t)) => (b, o, t),
+        _ => {
+            eprintln!("agent-doctor merge: could not read one of the input files");
+            return ExitCode::from(2);
+        }
+    };
+    let result = agent_doctor_merge::merge(&base_src, &ours_src, &theirs_src);
+
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&result).expect("serializable merge result")
+        );
+        return merge_exit(result.is_clean());
+    }
+
+    let destination = output.unwrap_or(ours);
+    if let Err(error) = std::fs::write(destination, &result.merged) {
+        eprintln!("agent-doctor merge: write {}: {error}", destination.display());
+        return ExitCode::from(2);
+    }
+    let p = palette();
+    if result.is_clean() {
+        eprintln!(
+            "  {}✓ merged cleanly{}{}",
+            p.green,
+            p.reset,
+            if result.fell_back { " (line fallback)" } else { "" }
+        );
+    } else {
+        eprintln!(
+            "  {}✖ {} conflict{}{} — markers written to {}",
+            p.red,
+            result.conflicts.len(),
+            plural(result.conflicts.len()),
+            p.reset,
+            destination.display()
+        );
+        for conflict in &result.conflicts {
+            eprintln!("    {}{}{}", p.dim, conflict.description, p.reset);
+        }
+    }
+    merge_exit(result.is_clean())
+}
+
+fn merge_exit(clean: bool) -> ExitCode {
+    if clean {
+        return ExitCode::SUCCESS;
+    }
+    ExitCode::FAILURE
+}
+
 fn main() -> ExitCode {
     let cli = Cli::parse();
     match &cli.command {
@@ -416,6 +494,13 @@ fn main() -> ExitCode {
                 *json,
             )
         }
+        Some(Command::Merge {
+            base,
+            ours,
+            theirs,
+            output,
+            json,
+        }) => return run_merge(base, ours, theirs, output.as_deref(), *json),
         None => {}
     }
     let result = match scan(&ScanOptions {
