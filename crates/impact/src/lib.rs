@@ -10,7 +10,7 @@
 //! `import()`/`require()` in the affected set raises an explicit caveat rather
 //! than being silently dropped — callers pair selection with an always-run set.
 
-use std::collections::{BTreeSet, HashMap, VecDeque};
+use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 
 use agent_doctor_core::{is_test_file, SymbolGraph};
 use serde::Serialize;
@@ -35,72 +35,98 @@ pub struct ImpactResult {
     pub caveats: Vec<String>,
 }
 
-/// Reverse dependency map: file → files that import it (its direct dependents).
-fn reverse_deps(graph: &SymbolGraph) -> HashMap<String, Vec<String>> {
-    let mut map: HashMap<String, Vec<String>> = HashMap::new();
-    for edge in graph.import_edges() {
-        map.entry(edge.to).or_default().push(edge.from);
-    }
-    map
+/// A precomputed reverse-dependency graph: the expensive import-resolution pass
+/// is done once at [`DepGraph::build`], so each [`DepGraph::select`] is just a
+/// graph walk. A warm server builds this once per index revision and reuses it
+/// across thousands of selections.
+pub struct DepGraph {
+    /// file → files that import it (its direct dependents).
+    dependents: HashMap<String, Vec<String>>,
+    /// Files that use dynamic `import()`/`require()`.
+    dynamic: HashSet<String>,
 }
 
-/// Transitive closure of dependents: every file that directly or indirectly
-/// imports any changed file, plus the changed files themselves.
-fn affected_set(graph: &SymbolGraph, changed: &[String]) -> BTreeSet<String> {
-    let dependents = reverse_deps(graph);
-    let mut seen: BTreeSet<String> = BTreeSet::new();
-    let mut queue: VecDeque<String> = changed.iter().cloned().collect();
-    while let Some(file) = queue.pop_front() {
-        if !seen.insert(file.clone()) {
-            continue;
+impl DepGraph {
+    /// Build the reverse-dependency graph from a symbol graph (one-time cost).
+    pub fn build(graph: &SymbolGraph) -> DepGraph {
+        let mut dependents: HashMap<String, Vec<String>> = HashMap::new();
+        for edge in graph.import_edges() {
+            dependents.entry(edge.to).or_default().push(edge.from);
         }
-        if let Some(importers) = dependents.get(&file) {
-            for importer in importers {
-                if !seen.contains(importer) {
-                    queue.push_back(importer.clone());
+        let dynamic = graph
+            .files()
+            .filter(|file| file.dynamic_imports)
+            .map(|file| file.path.clone())
+            .collect();
+        DepGraph {
+            dependents,
+            dynamic,
+        }
+    }
+
+    /// Select the tests reaching `changed`, plus the always-run set.
+    pub fn select(&self, changed: &[String], config: &ImpactConfig) -> ImpactResult {
+        let affected = self.affected_set(changed);
+        let mut tests: BTreeSet<String> = affected
+            .iter()
+            .filter(|file| is_test_file(file))
+            .cloned()
+            .collect();
+        tests.extend(config.always_run.iter().cloned());
+        let caveats = self.caveats(&affected);
+        ImpactResult {
+            tests: tests.into_iter().collect(),
+            affected: affected.into_iter().collect(),
+            caveats,
+        }
+    }
+
+    /// Transitive closure of dependents: every file that directly or indirectly
+    /// imports any changed file, plus the changed files themselves.
+    fn affected_set(&self, changed: &[String]) -> BTreeSet<String> {
+        let mut seen: BTreeSet<String> = BTreeSet::new();
+        let mut queue: VecDeque<&str> = changed.iter().map(String::as_str).collect();
+        while let Some(file) = queue.pop_front() {
+            if !seen.insert(file.to_string()) {
+                continue;
+            }
+            if let Some(importers) = self.dependents.get(file) {
+                for importer in importers {
+                    if !seen.contains(importer.as_str()) {
+                        queue.push_back(importer);
+                    }
                 }
             }
         }
+        seen
     }
-    seen
+
+    /// Warn when the affected set contains dynamic imports the static graph
+    /// can't follow — the one place file-level selection under-approximates.
+    fn caveats(&self, affected: &BTreeSet<String>) -> Vec<String> {
+        let dynamic: Vec<&str> = affected
+            .iter()
+            .filter(|file| self.dynamic.contains(file.as_str()))
+            .map(String::as_str)
+            .collect();
+        if dynamic.is_empty() {
+            return Vec::new();
+        }
+        let sample = dynamic.iter().take(3).copied().collect::<Vec<_>>().join(", ");
+        vec![format!(
+            "{} affected file(s) use dynamic import()/require() ({sample}{}) — \
+             dependencies may be hidden and selection can under-approximate; \
+             the always-run set is the safety net",
+            dynamic.len(),
+            if dynamic.len() > 3 { ", …" } else { "" }
+        )]
+    }
 }
 
-/// Select the tests reaching `changed`, plus the always-run set.
+/// One-shot selection (builds a [`DepGraph`] and discards it). Use [`DepGraph`]
+/// directly when selecting repeatedly against the same index.
 pub fn select(graph: &SymbolGraph, changed: &[String], config: &ImpactConfig) -> ImpactResult {
-    let affected = affected_set(graph, changed);
-    let mut tests: BTreeSet<String> = affected
-        .iter()
-        .filter(|file| is_test_file(file))
-        .cloned()
-        .collect();
-    tests.extend(config.always_run.iter().cloned());
-    let caveats = caveats(graph, &affected);
-    ImpactResult {
-        tests: tests.into_iter().collect(),
-        affected: affected.into_iter().collect(),
-        caveats,
-    }
-}
-
-/// Warn when the affected set contains dynamic imports the static graph can't
-/// follow — the one place file-level selection knowingly under-approximates.
-fn caveats(graph: &SymbolGraph, affected: &BTreeSet<String>) -> Vec<String> {
-    let dynamic: Vec<&str> = affected
-        .iter()
-        .filter(|file| graph.file(file).is_some_and(|symbols| symbols.dynamic_imports))
-        .map(String::as_str)
-        .collect();
-    if dynamic.is_empty() {
-        return Vec::new();
-    }
-    let sample = dynamic.iter().take(3).copied().collect::<Vec<_>>().join(", ");
-    vec![format!(
-        "{} affected file(s) use dynamic import()/require() ({sample}{}) — \
-         dependencies may be hidden and selection can under-approximate; \
-         the always-run set is the safety net",
-        dynamic.len(),
-        if dynamic.len() > 3 { ", …" } else { "" }
-    )]
+    DepGraph::build(graph).select(changed, config)
 }
 
 #[cfg(test)]

@@ -16,6 +16,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent_doctor_bench"
+version = "0.1.1"
+dependencies = [
+ "agent_doctor_core",
+ "agent_doctor_impact",
+]
+
+[[package]]
 name = "agent_doctor_core"
 version = "0.1.1"
 dependencies = [

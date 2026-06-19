@@ -1,0 +1,14 @@
+[package]
+name = "agent_doctor_bench"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "agent-doctor-bench"
+path = "src/main.rs"
+
+[dependencies]
+agent_doctor_core.workspace = true
+agent_doctor_impact.workspace = true

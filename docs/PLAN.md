@@ -3,6 +3,17 @@
 Execution checklist for turning `agent-doctor` into the deterministic agent toolkit.
 Design lives in [TOOLKIT.md](./TOOLKIT.md) — read the referenced section before each task.
 
+## Status (live)
+
+- **Phase 0** — `P0.0` crate split *deferred* (extract the kernel once consumers prove the
+  boundary; rename is mechanical later). `P0.2`–`P0.5` ✅ done: content-addressing, symbol
+  graph, warm `Index`, incremental update — all additive on `crates/core`.
+- **Phase 2** — ✅ done: `crates/impact` (reverse-dep selection, `DepGraph`, dynamic-import
+  caveat) + `agent-doctor impact` subcommand.
+- **Phase 7** — ✅ harness done (`crates/bench` + `bench/run.sh`); see `bench/RESULTS.md`.
+- Next: Phase 1 (policy/gate), Phase 3 (semantic merge), Phase 4 (server), Phase 5
+  (orchestrator), Phase 6 (agent-native VCS).
+
 ## How to run this with `/loop`
 
 Trigger with:
@@ -182,6 +193,18 @@ Goal: reference orchestrator driving the deterministic loop. New crate `crates/o
 - [ ] **P5.6** Live frontier dedup: run `fn_index` across in-flight task drafts; flag two tasks
   writing the same helper before merge. DoD: test with two stub tasks adding identical helpers
   raises the cross-draft duplicate.
+
+## Phase 7 — Benchmark / latency harness (design → bench/RESULTS.md)
+
+Goal: measure kernel latency across many real projects so regressions and scaling are visible.
+
+- [x] **P7.1** `crates/bench` binary: take project dirs, measure cold build / warm incremental
+  update / warm impact select, report p50/p95. DoD: runs on a dir, prints a table.
+- [x] **P7.2** `bench/run.sh`: clone a tiered set of real TS repos (zustand→zod→trpc→effect)
+  into `bench/projects/` (gitignored) and run the harness. DoD: idempotent re-runs.
+- [x] **P7.3** Capture sample numbers in `bench/RESULTS.md`. DoD: table with real measurements.
+- [ ] **P7.4** Add gate (L1) and merge (L3) latency rows once those layers land.
+- [ ] **P7.5** CI job: fail if cold-build µs/file regresses beyond a threshold on a pinned repo.
 
 ## Milestones
 
