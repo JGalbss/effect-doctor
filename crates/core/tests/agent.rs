@@ -274,3 +274,24 @@ fn flags_inline_type_import() {
     let source = src("export const save = (u: import(\"./users\").User) => store(u)\n");
     assert_fires_agent(&source, "agent-no-inline-type-import", 1);
 }
+
+#[test]
+fn flags_ts_namespace() {
+    let source = src("export namespace Utils {\n  export const f = (n: number) => n + 1\n}\n");
+    assert_fires_agent(&source, "agent-no-ts-namespace", 1);
+}
+
+#[test]
+fn flags_throw_outside_effect_but_not_inside_gen() {
+    let outside = src("export const f = (raw: string) => {\n  if (raw.length === 0) throw new Error(\"empty\")\n  return raw\n}\n");
+    assert_fires_agent(&outside, "agent-no-throw", 1);
+    let inside = src("export const f = Effect.gen(function* () {\n  throw new Error(\"x\")\n})\n");
+    // no-throw-in-effect owns throws inside Effect code; the agent rule defers.
+    assert_fires_agent(&inside, "agent-no-throw", 0);
+}
+
+#[test]
+fn flags_delete_operator() {
+    let source = src("export const scrub = (payload: { secret?: string }) => {\n  delete payload.secret\n  return payload\n}\n");
+    assert_fires_agent(&source, "agent-no-delete", 1);
+}

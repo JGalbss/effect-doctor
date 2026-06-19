@@ -13,7 +13,8 @@ use oxc_ast::ast::{
     Argument, ArrowFunctionExpression, AssignmentExpression, AssignmentTarget, BinaryExpression,
     CallExpression, ConditionalExpression, Expression, Function, FunctionBody, IfStatement,
     ImportDeclaration, ImportDeclarationSpecifier, ImportExpression, ModuleExportName, Statement,
-    TSAsExpression, TSType, TSTypeName, TryStatement, VariableDeclaration, VariableDeclarationKind,
+    TSAsExpression, TSType, TSTypeName, ThrowStatement, TryStatement, UnaryExpression,
+    VariableDeclaration, VariableDeclarationKind,
 };
 use oxc_span::Span;
 use oxc_syntax::operator::BinaryOperator;
@@ -147,6 +148,27 @@ static TS_ENUM: RuleMeta = RuleMeta {
     severity: Severity::Warn,
     category: Category::AgentHygiene,
     help: "TS `enum` emits runtime code and has surprising semantics. Use a union of string literals (or `Schema.Literals(...)`) and derive the type — it's erasable and decodes cleanly.",
+};
+
+static TS_NAMESPACE: RuleMeta = RuleMeta {
+    id: "agent-no-ts-namespace",
+    severity: Severity::Info,
+    category: Category::AgentHygiene,
+    help: "TS `namespace` is a legacy module system that emits runtime code and nests scope awkwardly. Use ES modules (one file = one module) and named exports.",
+};
+
+static THROW: RuleMeta = RuleMeta {
+    id: "agent-no-throw",
+    severity: Severity::Info,
+    category: Category::AgentHygiene,
+    help: "Throwing outside Effect produces an untyped exception that escapes the type system. Model failure explicitly — return a Result/Either, or `Effect.fail` a tagged error inside Effect code.",
+};
+
+static DELETE_OP: RuleMeta = RuleMeta {
+    id: "agent-no-delete",
+    severity: Severity::Info,
+    category: Category::AgentHygiene,
+    help: "`delete` mutates an object in place and deoptimizes it. Build a new object without the key (destructure-and-rest, or `Struct.omit`) instead.",
 };
 
 static INLINE_TYPE_IMPORT: RuleMeta = RuleMeta {
@@ -293,9 +315,46 @@ impl Rule for AgentHygiene {
             &TS_ENUM,
             &SAFE_PARSE,
             &INLINE_TYPE_IMPORT,
+            &TS_NAMESPACE,
+            &THROW,
+            &DELETE_OP,
             &DUPLICATE_FUNCTION,
         ];
         METAS
+    }
+
+    fn on_ts_namespace(&self, span: Span, ctx: &mut FileCtx) {
+        if !ctx.agent_active() {
+            return;
+        }
+        ctx.report_agent(
+            &TS_NAMESPACE,
+            keyword_span(span, 9),
+            "TS namespace — use ES modules and named exports".to_string(),
+        );
+    }
+
+    fn on_throw(&self, throw_stmt: &ThrowStatement<'_>, ctx: &mut FileCtx) {
+        // Inside Effect code, `no-throw-in-effect` (error) owns this.
+        if !ctx.agent_active() || ctx.in_effect_code() {
+            return;
+        }
+        ctx.report_agent(
+            &THROW,
+            keyword_span(throw_stmt.span, 5),
+            "throw — return a Result/Either or Effect.fail a tagged error".to_string(),
+        );
+    }
+
+    fn on_unary(&self, unary: &UnaryExpression<'_>, ctx: &mut FileCtx) {
+        if !ctx.agent_active() || !unary.operator.is_delete() {
+            return;
+        }
+        ctx.report_agent(
+            &DELETE_OP,
+            keyword_span(unary.span, 6),
+            "delete mutates in place — build a new object without the key".to_string(),
+        );
     }
 
     fn on_ts_import_type(&self, span: Span, ctx: &mut FileCtx) {

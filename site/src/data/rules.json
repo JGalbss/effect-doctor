@@ -864,6 +864,30 @@
     "severity": "warn"
   },
   {
+    "bad": "namespace Utils {\n  export const format = (n: number) => `${n}`\n}",
+    "category": "Agent hygiene",
+    "good": "// utils.ts — one file = one module\nexport const format = (n: number) => `${n}`",
+    "help": "TS `namespace` is a legacy module system that emits runtime code and nests scope awkwardly. Use ES modules (one file = one module) and named exports.",
+    "id": "agent-no-ts-namespace",
+    "severity": "info"
+  },
+  {
+    "bad": "function parse(raw: string) {\n  if (!raw) throw new Error(\"empty\")\n  return raw\n}",
+    "category": "Agent hygiene",
+    "good": "const parse = (raw: string): Either.Either<string, EmptyInput> =>\n  raw.length === 0 ? Either.left(new EmptyInput()) : Either.right(raw)",
+    "help": "Throwing outside Effect produces an untyped exception that escapes the type system. Model failure explicitly — return a Result/Either, or `Effect.fail` a tagged error inside Effect code.",
+    "id": "agent-no-throw",
+    "severity": "info"
+  },
+  {
+    "bad": "delete payload.secret",
+    "category": "Agent hygiene",
+    "good": "const { secret, ...payload } = input // build a new object without the key",
+    "help": "`delete` mutates an object in place and deoptimizes it. Build a new object without the key (destructure-and-rest, or `Struct.omit`) instead.",
+    "id": "agent-no-delete",
+    "severity": "info"
+  },
+  {
     "bad": "const usageBarFill = (p) => p >= 100 ? red : p >= 80 ? amber : gray\nconst usageText = (p) => p >= 100 ? red : p >= 80 ? amber : gray // copy-paste",
     "category": "Agent hygiene",
     "good": "const usageTone = (p) => p >= 100 ? red : p >= 80 ? amber : gray\nconst usageBarFill = usageTone\nconst usageText = usageTone",

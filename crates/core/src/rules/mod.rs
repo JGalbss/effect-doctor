@@ -2,8 +2,8 @@ use oxc_ast::ast::{
     ArrowFunctionExpression, AssignmentExpression, BinaryExpression, CallExpression, Class,
     ConditionalExpression, Function, IfStatement, ImportDeclaration, ImportExpression,
     NewExpression, ReturnStatement, Statement, StaticMemberExpression, SwitchStatement,
-    TSAsExpression, TaggedTemplateExpression, ThrowStatement, TryStatement, VariableDeclaration,
-    YieldExpression,
+    TSAsExpression, TaggedTemplateExpression, ThrowStatement, TryStatement, UnaryExpression,
+    VariableDeclaration, YieldExpression,
 };
 use oxc_span::Span;
 
@@ -201,6 +201,9 @@ pub trait Rule: Sync {
     fn on_ts_enum(&self, _span: Span, _ctx: &mut FileCtx) {}
     /// A `TSImportType` (`import("...").Foo` used as a type).
     fn on_ts_import_type(&self, _span: Span, _ctx: &mut FileCtx) {}
+    /// A `TSModuleDeclaration` of `namespace` kind.
+    fn on_ts_namespace(&self, _span: Span, _ctx: &mut FileCtx) {}
+    fn on_unary(&self, _unary: &UnaryExpression<'_>, _ctx: &mut FileCtx) {}
     fn on_file_end(&self, _ctx: &mut FileCtx) {}
 }
 

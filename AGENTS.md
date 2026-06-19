@@ -33,6 +33,8 @@ from: **[oc]** = opencode `AGENTS.md`, **[rogo]** = the Rogo TS conventions,
 - **No `let`/`var`.** Bind with `const`; build values functionally. — `agent-no-let` [oc][rogo][std]
 - **No reassignment or in-place payload mutation.** Derive the final value once
   rather than building up intermediate states. — `agent-no-mutation` [oc][std]
+- **No `delete`.** Build a new object without the key (rest / `Struct.omit`). —
+  `agent-no-delete`
 
 ## Iteration & concurrency
 
@@ -71,10 +73,17 @@ from: **[oc]** = opencode `AGENTS.md`, **[rogo]** = the Rogo TS conventions,
 - **No inline `import("...").Foo` type refs.** Use a top-level `import type`. —
   `agent-no-inline-type-import` [rogo]
 
+## Modules
+
+- **No TS `namespace`.** Use ES modules (one file = one module) + named
+  exports. — `agent-no-ts-namespace`
+
 ## Error handling
 
 - **Avoid `try/catch`.** Model failure in the typed channel (`Effect.try` +
   `catchTag`) or return a `Result`. — `agent-no-try-catch` [oc][rogo]
+- **No `throw` outside Effect.** Return a Result/Either or `Effect.fail` a
+  tagged error. — `agent-no-throw`
 
 ## Functions & duplication
 

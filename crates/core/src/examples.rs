@@ -476,6 +476,18 @@ pub fn example_for(rule: &str) -> Option<RuleExample> {
             "function save(user: import(\"src/users/users.interface\").User) {}",
             "import type { User } from \"src/users/users.interface\"\nfunction save(user: User) {}",
         ),
+        "agent-no-ts-namespace" => (
+            "namespace Utils {\n  export const format = (n: number) => `${n}`\n}",
+            "// utils.ts — one file = one module\nexport const format = (n: number) => `${n}`",
+        ),
+        "agent-no-throw" => (
+            "function parse(raw: string) {\n  if (!raw) throw new Error(\"empty\")\n  return raw\n}",
+            "const parse = (raw: string): Either.Either<string, EmptyInput> =>\n  raw.length === 0 ? Either.left(new EmptyInput()) : Either.right(raw)",
+        ),
+        "agent-no-delete" => (
+            "delete payload.secret",
+            "const { secret, ...payload } = input // build a new object without the key",
+        ),
         _ => return None,
     };
     Some(RuleExample { bad, good })
