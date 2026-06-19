@@ -1,5 +1,9 @@
 # agent-doctor — Architecture
 
+> The deterministic **agent toolkit** built on this kernel (policy/gate, impact,
+> semantic merge, context server, orchestrator, VCS) is described in
+> [TOOLKIT.md](./TOOLKIT.md); build status and checklist in [PLAN.md](./PLAN.md).
+
 A react.doctor-style health scanner for Effect TS codebases. Scan a repo, score it 0–100,
 report Effect anti-patterns with code frames, hand off fixes to AI agents. Built for massive
 monorepos: target ~1–2s for 10k files.

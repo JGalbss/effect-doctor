@@ -79,7 +79,7 @@ establish "kernel = content-addressed index". Behavior of the shipped linter mus
 - [ ] **P0.0b** Rename internal crate identifiers consistently (`agent_doctor_core` →
   `agent_doctor_kernel` + `agent_doctor_effect_lint`) and fix imports. DoD: workspace builds;
   no dangling `core` references; published crate/package names unchanged externally.
-- [ ] **P0.1** Add `docs/TOOLKIT.md` cross-link to `README.md` and `docs/ARCHITECTURE.md`
+- [x] **P0.1** Add `docs/TOOLKIT.md` cross-link to `README.md` and `docs/ARCHITECTURE.md`
   (one line each pointing at the toolkit direction). DoD: links render, no other change.
 - [ ] **P0.2** Introduce content-addressed identity types in `crates/kernel`: `FileId`,
   `ContentHash` (stable hash of source), and an `AstHash`/reuse of `structural::Shape` hash for
