@@ -19,10 +19,14 @@ Design lives in [TOOLKIT.md](./TOOLKIT.md) — read the referenced section befor
 - **Phase 5** — ✅ `crates/orchestrator`: ledger/DAG, footprint estimation, live frontier dedup,
   and the deterministic run loop (lease → context → execute → gate → retry-with-findings).
 - **Phase 7** — ✅ `crates/bench` + `bench/run.sh` + `bench/RESULTS.md`.
-- **Phase 6** — foundation: `Vcs` trait + git adapter (isolated workspaces, diff, semantic
-  merge). The full *native* jj-inspired VCS remains the explicitly-deferred long tail
-  (correctness/test cost ≈ jj's 112k test LOC); built behind the trait so it swaps in later.
-- **Totals:** 9 crates, 230 workspace tests passing; merge driver / serve / gate proven e2e.
+- **Phase 6** — ✅ `crates/vcs`: `Vcs` trait + `GitVcs`, content-addressed op-log (agent/task
+  attribution, deterministic undo/revert-task), `Repo` facade. `P6.5` fully-native storage
+  engine is the explicitly-deferred long tail (≈ jj's 112k test LOC), drop-in behind the trait.
+- **MCP** — ✅ `serve --mcp` exposes the kernel's ground-truth tools to agent harnesses.
+- **Totals:** 10 crates, **247 workspace tests passing**, clean build; merge driver / serve /
+  MCP / gate proven e2e; perf wins (impact 1300→0.2µs, gate 1193→4µs) caught by the harness.
+- **Done:** Phases 0–7 (P0.0 crate-split and P6.5 native-storage are the two documented,
+  intentional deferrals).
 
 ## How to run this with `/loop`
 
