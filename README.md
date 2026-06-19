@@ -74,6 +74,18 @@ docker run --rm -v "$PWD:/repo" agent-doctor gate --base main
 docker run --rm -i -v "$PWD:/repo" agent-doctor serve --mcp   # MCP over stdio
 ```
 
+### Graphite / git hooks / CI
+
+`agent-doctor verify` gates a diff and runs only the impacted tests — wire it as a
+pre-push hook so it fires on `gt submit` (or `git push`), or as a GitHub Action.
+
+```sh
+agent-doctor init --hooks          # installs .git/hooks/pre-push -> agent-doctor verify
+agent-doctor verify --run "npx vitest run"   # gate + run impacted tests
+```
+
+Full setup (Graphite, hook, GitHub Action, wrapper alias): [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
+
 The merge driver `init` registers (also settable by hand):
 
 ```sh

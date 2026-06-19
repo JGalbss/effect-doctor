@@ -134,6 +134,26 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Pre-submit check: gate the diff, then select (and optionally run) the
+    /// impacted tests. Designed as a pre-push hook (fires on `gt submit`).
+    Verify {
+        /// Diff base ref (default: merge-base with main)
+        #[arg(long)]
+        base: Option<String>,
+        /// Acting agent id (enables ACL + lease checks)
+        #[arg(long)]
+        actor: Option<String>,
+        /// Policy file
+        #[arg(long, default_value = "agent-doctor.policy.toml")]
+        policy: PathBuf,
+        /// Leases file
+        #[arg(long, default_value = ".agent-doctor/leases.json")]
+        leases: PathBuf,
+        /// Run the impacted tests with this command; the test files are appended
+        /// (e.g. --run "npx vitest run"). Omit to only list them.
+        #[arg(long)]
+        run: Option<String>,
+    },
     /// Semantic (AST-level) 3-way merge driver for TypeScript files
     Merge {
         /// Base (common ancestor) file
@@ -166,6 +186,10 @@ enum Command {
         /// Overwrite existing files instead of leaving them untouched
         #[arg(long)]
         force: bool,
+        /// Also install a git pre-push hook that runs `agent-doctor verify`
+        /// (fires on `gt submit` / `git push`)
+        #[arg(long)]
+        hooks: bool,
     },
     /// Run a task ledger through the deterministic loop with a pluggable agent
     Orchestrate {
@@ -275,6 +299,19 @@ fn run_rules(json: bool) -> ExitCode {
     ExitCode::SUCCESS
 }
 
+/// The changed-file set vs `base` plus a freshly-built index — the common setup
+/// for `impact`, `gate`, and `verify` (computed one way, in one place).
+fn changed_and_index(
+    root: &std::path::Path,
+    base: Option<&str>,
+) -> Result<(Vec<String>, agent_doctor_core::Index), String> {
+    let resolved_base = agent_doctor_core::resolve_base(root, base)?;
+    let diff = agent_doctor_core::collect_diff(root, &resolved_base, false)?;
+    let mut changed: Vec<String> = diff.files.keys().cloned().collect();
+    changed.sort();
+    Ok((changed, agent_doctor_core::Index::build(root)))
+}
+
 /// `agent-doctor impact` — build the index, diff against the base, and report
 /// the tests reaching the change.
 fn run_impact(
@@ -283,23 +320,13 @@ fn run_impact(
     json: bool,
     always_run: Vec<String>,
 ) -> ExitCode {
-    let resolved_base = match agent_doctor_core::resolve_base(root, base) {
-        Ok(base) => base,
+    let (changed, index) = match changed_and_index(root, base) {
+        Ok(pair) => pair,
         Err(error) => {
             eprintln!("agent-doctor impact: {error}");
             return ExitCode::from(2);
         }
     };
-    let diff = match agent_doctor_core::collect_diff(root, &resolved_base, false) {
-        Ok(diff) => diff,
-        Err(error) => {
-            eprintln!("agent-doctor impact: {error}");
-            return ExitCode::from(2);
-        }
-    };
-    let mut changed: Vec<String> = diff.files.keys().cloned().collect();
-    changed.sort();
-    let index = agent_doctor_core::Index::build(root);
     let result = agent_doctor_impact::select(
         index.graph(),
         &changed,
@@ -359,15 +386,8 @@ fn run_gate(
             return ExitCode::from(2);
         }
     };
-    let resolved_base = match agent_doctor_core::resolve_base(root, base) {
-        Ok(base) => base,
-        Err(error) => {
-            eprintln!("agent-doctor gate: {error}");
-            return ExitCode::from(2);
-        }
-    };
-    let diff = match agent_doctor_core::collect_diff(root, &resolved_base, false) {
-        Ok(diff) => diff,
+    let (changed, index) = match changed_and_index(root, base) {
+        Ok(pair) => pair,
         Err(error) => {
             eprintln!("agent-doctor gate: {error}");
             return ExitCode::from(2);
@@ -380,9 +400,6 @@ fn run_gate(
             return ExitCode::from(2);
         }
     };
-    let mut changed: Vec<String> = diff.files.keys().cloned().collect();
-    changed.sort();
-    let index = agent_doctor_core::Index::build(root);
     let violations = agent_doctor_policy::evaluate(&agent_doctor_policy::GateInput {
         policy: &policy,
         graph: index.graph(),
@@ -435,6 +452,103 @@ fn gate_exit(violations: &[agent_doctor_policy::Violation]) -> ExitCode {
         return ExitCode::SUCCESS;
     }
     ExitCode::FAILURE
+}
+
+/// `agent-doctor verify` — the pre-submit gate: deny on policy violations, then
+/// select the impacted tests and (with --run) execute exactly those. Exits
+/// non-zero if the gate fails or the tests fail.
+fn run_verify(
+    root: &std::path::Path,
+    base: Option<&str>,
+    actor: Option<&str>,
+    policy_path: &std::path::Path,
+    leases_path: &std::path::Path,
+    run: Option<&str>,
+) -> ExitCode {
+    let policy = match agent_doctor_policy::Policy::load(policy_path) {
+        Ok(policy) => policy,
+        Err(error) => {
+            eprintln!("agent-doctor verify: policy: {error}");
+            return ExitCode::from(2);
+        }
+    };
+    let (changed, index) = match changed_and_index(root, base) {
+        Ok(pair) => pair,
+        Err(error) => {
+            eprintln!("agent-doctor verify: {error}");
+            return ExitCode::from(2);
+        }
+    };
+    let leases = agent_doctor_policy::LeaseSet::load(leases_path).unwrap_or_default();
+    let p = palette();
+
+    // 1. gate — a policy violation blocks the submit.
+    let violations = agent_doctor_policy::evaluate(&agent_doctor_policy::GateInput {
+        policy: &policy,
+        graph: index.graph(),
+        changed: &changed,
+        actor,
+        leases: Some(&leases),
+    });
+    println!();
+    if !violations.is_empty() {
+        println!("  {}verify: gate failed{} — {} violation{}", p.red, p.reset, violations.len(), plural(violations.len()));
+        for violation in &violations {
+            println!("    {}{:?}{} {} — {}", p.red, violation.kind, p.reset, violation.file, violation.reason);
+        }
+        println!();
+        return ExitCode::FAILURE;
+    }
+
+    // 2. impact — the tests reaching the diff.
+    let impact = agent_doctor_impact::select(
+        index.graph(),
+        &changed,
+        &agent_doctor_impact::ImpactConfig::default(),
+    );
+    println!(
+        "  {}verify: gate ok{} — {} impacted test{}",
+        p.green,
+        p.reset,
+        impact.tests.len(),
+        plural(impact.tests.len())
+    );
+    for test in &impact.tests {
+        println!("    {}{}{}", p.cyan, test, p.reset);
+    }
+    for caveat in &impact.caveats {
+        println!("  {}warning: {}{}", p.yellow, caveat, p.reset);
+    }
+
+    // 3. optionally run exactly those tests.
+    let Some(run) = run else {
+        println!();
+        return ExitCode::SUCCESS;
+    };
+    if impact.tests.is_empty() {
+        println!("  {}no impacted tests to run{}", p.dim, p.reset);
+        println!();
+        return ExitCode::SUCCESS;
+    }
+    let mut parts = run.split_whitespace();
+    let Some(program) = parts.next() else {
+        eprintln!("agent-doctor verify: empty --run command");
+        return ExitCode::from(2);
+    };
+    let status = std::process::Command::new(program)
+        .args(parts)
+        .args(&impact.tests)
+        .current_dir(root)
+        .status();
+    println!();
+    match status {
+        Ok(status) if status.success() => ExitCode::SUCCESS,
+        Ok(_) => ExitCode::FAILURE,
+        Err(error) => {
+            eprintln!("agent-doctor verify: running tests: {error}");
+            ExitCode::from(2)
+        }
+    }
 }
 
 /// `agent-doctor merge` — semantic 3-way merge. Writes the result to `<ours>`
@@ -559,7 +673,7 @@ const STATE_GITIGNORE: &str = "# agent-doctor local state — do not commit\n*\n
 
 /// `agent-doctor init` — scaffold the toolkit in a repo. Idempotent: existing
 /// files are left untouched unless `--force`.
-fn run_init(root: &std::path::Path, force: bool) -> ExitCode {
+fn run_init(root: &std::path::Path, force: bool, hooks: bool) -> ExitCode {
     let p = palette();
     println!();
     println!("  {}agent-doctor init{}", p.bold, p.reset);
@@ -569,16 +683,63 @@ fn run_init(root: &std::path::Path, force: bool) -> ExitCode {
     write_scaffold(root, ".agent-doctor/.gitignore", STATE_GITIGNORE, force, p);
     write_scaffold(root, ".mcp.json", MCP_CONFIG, force, p);
     ensure_merge_driver(root, p);
+    if hooks {
+        install_pre_push_hook(root, force, p);
+    }
 
     println!();
     println!("  {}next steps{}", p.bold, p.reset);
     println!("    • edit {}agent-doctor.policy.toml{} to set your layers/ACLs", p.cyan, p.reset);
     println!("    • {}agent-doctor gate --base main --actor you{}  — gate a diff", p.dim, p.reset);
     println!("    • {}agent-doctor impact --base main{}            — tests for a diff", p.dim, p.reset);
+    println!("    • {}agent-doctor verify{}  — gate + impacted tests (wire as a pre-push hook)", p.dim, p.reset);
     println!("    • restart your agent harness to load the MCP server (.mcp.json)");
     println!();
     ExitCode::SUCCESS
 }
+
+/// Install a git pre-push hook that runs `agent-doctor verify` — so a Graphite
+/// `gt submit` (or plain `git push`) is gated and impact-tested automatically.
+fn install_pre_push_hook(root: &std::path::Path, force: bool, p: &Palette) {
+    if !root.join(".git").exists() {
+        println!("    {}skip{} pre-push hook (not a git repo)", p.dim, p.reset);
+        return;
+    }
+    let hook = root.join(".git/hooks/pre-push");
+    if hook.exists() && !force {
+        println!("    {}skip{} .git/hooks/pre-push (exists)", p.dim, p.reset);
+        return;
+    }
+    let exe = std::env::current_exe()
+        .map(|path| path.display().to_string())
+        .unwrap_or_else(|_| "agent-doctor".to_string());
+    let body = format!(
+        "#!/bin/sh\n# agent-doctor: gate the diff + run impacted tests before push.\nexec {exe} verify\n"
+    );
+    if let Some(parent) = hook.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    match std::fs::write(&hook, body) {
+        Ok(()) => {
+            set_executable(&hook);
+            println!("    {}wrote{} .git/hooks/pre-push (runs verify)", p.green, p.reset);
+        }
+        Err(error) => println!("    {}error{} pre-push ({error})", p.red, p.reset),
+    }
+}
+
+#[cfg(unix)]
+fn set_executable(path: &std::path::Path) {
+    use std::os::unix::fs::PermissionsExt;
+    if let Ok(meta) = std::fs::metadata(path) {
+        let mut perms = meta.permissions();
+        perms.set_mode(0o755);
+        let _ = std::fs::set_permissions(path, perms);
+    }
+}
+
+#[cfg(not(unix))]
+fn set_executable(_path: &std::path::Path) {}
 
 /// Write a scaffolded file, creating parent dirs. Skips existing files unless forced.
 fn write_scaffold(root: &std::path::Path, relative: &str, contents: &str, force: bool, p: &Palette) {
@@ -767,6 +928,22 @@ fn main() -> ExitCode {
                 *json,
             )
         }
+        Some(Command::Verify {
+            base,
+            actor,
+            policy,
+            leases,
+            run,
+        }) => {
+            return run_verify(
+                &cli.path,
+                base.as_deref(),
+                actor.as_deref(),
+                policy,
+                leases,
+                run.as_deref(),
+            )
+        }
         Some(Command::Merge {
             base,
             ours,
@@ -779,7 +956,7 @@ fn main() -> ExitCode {
             leases,
             mcp,
         }) => return run_serve(&cli.path, policy, leases, *mcp),
-        Some(Command::Init { force }) => return run_init(&cli.path, *force),
+        Some(Command::Init { force, hooks }) => return run_init(&cli.path, *force, *hooks),
         Some(Command::Orchestrate {
             ledger,
             actor,

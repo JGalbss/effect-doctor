@@ -307,6 +307,37 @@ fn gate_enforces_leases_per_actor() {
 }
 
 #[test]
+fn verify_passes_clean_and_blocks_on_policy() {
+    let dir = temp_dir("verify");
+    init_repo(&dir);
+    write(&dir, "src/a.ts", "export const x = 1\n");
+    write(&dir, "test/a.test.ts", "import '../src/a'\n");
+    git(&dir, &["add", "-A"]);
+    git(&dir, &["commit", "-qm", "base"]);
+    write(&dir, "src/a.ts", "export const x = 2\n");
+    git(&dir, &["commit", "-qam", "change"]);
+
+    // clean: gate ok, lists the impacted test, exit 0.
+    let ok = Command::new(BIN)
+        .current_dir(&dir)
+        .args(["verify", "--base", "HEAD~1"])
+        .output()
+        .unwrap();
+    assert!(ok.status.success());
+    assert!(String::from_utf8_lossy(&ok.stdout).contains("test/a.test.ts"));
+
+    // a policy that protects the changed file blocks the submit.
+    write(&dir, "deny.toml", "[protected]\nglobs = [\"src/a.ts\"]\n");
+    let blocked = Command::new(BIN)
+        .current_dir(&dir)
+        .args(["verify", "--base", "HEAD~1", "--policy", "deny.toml"])
+        .output()
+        .unwrap();
+    assert!(!blocked.status.success(), "policy violation must block verify");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
 fn orchestrate_runs_a_ledger_through_the_loop() {
     let dir = temp_dir("orch");
     write(&dir, "src/app.ts", "export const a = 1\n");
