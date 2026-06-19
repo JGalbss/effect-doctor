@@ -1,6 +1,13 @@
 [workspace]
 resolver = "2"
-members = ["crates/core", "crates/cli", "crates/wasm", "crates/impact", "crates/bench"]
+members = [
+    "crates/core",
+    "crates/cli",
+    "crates/wasm",
+    "crates/impact",
+    "crates/bench",
+    "crates/policy",
+]
 
 [workspace.package]
 version = "0.1.1"
@@ -11,6 +18,7 @@ repository = "https://github.com/JGalbss/agent-doctor"
 [workspace.dependencies]
 agent_doctor_core = { path = "crates/core" }
 agent_doctor_impact = { path = "crates/impact" }
+agent_doctor_policy = { path = "crates/policy" }
 
 oxc_allocator = "0.135"
 oxc_parser = "0.135"
@@ -25,6 +33,7 @@ ignore = "0.4"
 rayon = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+toml = "0.8"
 
 [profile.release]
 lto = "fat"
