@@ -1,3 +1,4 @@
+mod content_addr;
 #[cfg(feature = "native")]
 mod deep;
 mod diagnostics;
@@ -17,6 +18,7 @@ mod structural;
 #[cfg(feature = "native")]
 mod walk;
 
+pub use content_addr::{fnv1a, ContentHash, FileId};
 pub use diagnostics::{Category, Diagnostic, FileContext, RuleMeta, Severity};
 #[cfg(feature = "native")]
 pub use engine::{detect_effect_major, scan, ScanOptions, ScanResult};
