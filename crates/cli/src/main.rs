@@ -149,6 +149,15 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Run the context server: warm kernel answering line-delimited JSON queries
+    Serve {
+        /// Policy file (default: agent-doctor.policy.toml)
+        #[arg(long, default_value = "agent-doctor.policy.toml")]
+        policy: PathBuf,
+        /// Leases file (default: .agent-doctor/leases.json)
+        #[arg(long, default_value = ".agent-doctor/leases.json")]
+        leases: PathBuf,
+    },
 }
 
 fn run_explain(rule_id: &str) -> ExitCode {
@@ -461,6 +470,26 @@ fn merge_exit(clean: bool) -> ExitCode {
     ExitCode::FAILURE
 }
 
+/// `agent-doctor serve` — build the warm kernel and answer JSON queries on stdio.
+fn run_serve(
+    root: &std::path::Path,
+    policy: &std::path::Path,
+    leases: &std::path::Path,
+) -> ExitCode {
+    let mut kernel = match agent_doctor_server::Kernel::build(root, policy, leases) {
+        Ok(kernel) => kernel,
+        Err(error) => {
+            eprintln!("agent-doctor serve: {error}");
+            return ExitCode::from(2);
+        }
+    };
+    if let Err(error) = agent_doctor_server::serve(&mut kernel) {
+        eprintln!("agent-doctor serve: {error}");
+        return ExitCode::from(2);
+    }
+    ExitCode::SUCCESS
+}
+
 fn main() -> ExitCode {
     let cli = Cli::parse();
     match &cli.command {
@@ -501,6 +530,7 @@ fn main() -> ExitCode {
             output,
             json,
         }) => return run_merge(base, ours, theirs, output.as_deref(), *json),
+        Some(Command::Serve { policy, leases }) => return run_serve(&cli.path, policy, leases),
         None => {}
     }
     let result = match scan(&ScanOptions {

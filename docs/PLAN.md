@@ -6,13 +6,16 @@ Design lives in [TOOLKIT.md](./TOOLKIT.md) — read the referenced section befor
 ## Status (live)
 
 - **Phase 0** — `P0.0` crate split *deferred* (extract the kernel once consumers prove the
-  boundary; rename is mechanical later). `P0.2`–`P0.5` ✅ done: content-addressing, symbol
-  graph, warm `Index`, incremental update — all additive on `crates/core`.
-- **Phase 2** — ✅ done: `crates/impact` (reverse-dep selection, `DepGraph`, dynamic-import
-  caveat) + `agent-doctor impact` subcommand.
-- **Phase 7** — ✅ harness done (`crates/bench` + `bench/run.sh`); see `bench/RESULTS.md`.
-- Next: Phase 1 (policy/gate), Phase 3 (semantic merge), Phase 4 (server), Phase 5
-  (orchestrator), Phase 6 (agent-native VCS).
+  boundary; rename is mechanical later). `P0.2`–`P0.5` ✅: content-addressing, symbol graph,
+  warm `Index`, incremental update.
+- **Phase 1** — ✅ `crates/policy`: glob, TOML schema, ACL/layering/protected/lease gate +
+  `agent-doctor gate` (deny exits non-zero).
+- **Phase 2** — ✅ `crates/impact`: reverse-dep selection, `DepGraph`, dynamic-import caveat +
+  `agent-doctor impact`.
+- **Phase 3** — ✅ `crates/merge`: decl-level 3-way semantic merge (reorder/format-invariant,
+  changed-symbols, safe fallback) + `agent-doctor merge` git driver, **proven e2e**.
+- **Phase 7** — ✅ `crates/bench` + `bench/run.sh` + `bench/RESULTS.md`.
+- Next: Phase 4 (server / context API), Phase 5 (orchestrator), Phase 6 (agent-native VCS).
 
 ## How to run this with `/loop`
 

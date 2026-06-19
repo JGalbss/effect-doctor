@@ -177,6 +177,16 @@ Rule of thumb for placement: **deterministic & domain-agnostic → `kernel`**; *
 or scoring → `effect-lint`**; **agent-shell behavior → a toolkit-layer crate**. The Effect rule
 packs are just the first consumer of the rule engine, not privileged.
 
+## Server transport (P4.1 decision)
+
+The context server is a **library `Kernel`** (warm index + dep-graph + policy + leases,
+answering typed queries) behind a **line-delimited JSON dispatch** over stdio — one JSON
+request per line, one JSON response per line. Rationale: zero network/async deps, trivially
+testable (feed a string, assert a string), and the same engine the CLI calls. Index freshness
+is **push-based**: callers send an `update_file` request when a file changes (no fs-watch
+dependency, deterministic, matches the "push, don't poll" stance). A full MCP handshake and an
+optional fs-watcher are later adapters over this same `Kernel`.
+
 ## Open questions
 
 1. **Footprint estimation accuracy** — too tight → agents stall on lease requests; too loose →

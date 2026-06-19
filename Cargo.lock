@@ -10,6 +10,7 @@ dependencies = [
  "agent_doctor_impact",
  "agent_doctor_merge",
  "agent_doctor_policy",
+ "agent_doctor_server",
  "anstyle",
  "clap",
  "lsp-server",
@@ -70,6 +71,17 @@ dependencies = [
  "serde",
  "serde_json",
  "toml",
+]
+
+[[package]]
+name = "agent_doctor_server"
+version = "0.1.1"
+dependencies = [
+ "agent_doctor_core",
+ "agent_doctor_impact",
+ "agent_doctor_policy",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
