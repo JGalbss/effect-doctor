@@ -96,6 +96,18 @@ from: **[oc]** = opencode `AGENTS.md`, **[rogo]** = the Rogo TS conventions,
   `agent-near-duplicate-function`, `agent-similar-function-name`,
   `agent-similar-shape`
 
+## Control flow & architecture
+
+- **Don't nest control flow > 4 deep.** Use guard clauses / early returns or
+  extract the inner block. — `agent-deep-nesting`
+- **Keep cyclomatic complexity ≤ 15.** Split big branchy functions; replace
+  branching with Match / a lookup. — `agent-high-complexity`
+- **≤ 5 positional parameters.** Pass a named options object. — `agent-too-many-params`
+- **No `../../../` imports.** Use a path alias or move shared code closer. —
+  `agent-deep-relative-import`
+- **No import cycles.** Break them with a leaf module or by inverting a
+  dependency. — `agent-circular-import`
+
 ## Effect specifics
 
 - Pass an explicit `concurrency` to `Effect.forEach` / `Effect.all` (or

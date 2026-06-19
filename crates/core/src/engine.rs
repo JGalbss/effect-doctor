@@ -178,7 +178,7 @@ pub fn scan(options: &ScanOptions) -> Result<ScanResult, String> {
     }
     if options.agent {
         let mut cross_file = crate::fn_index::cross_file_findings(&functions);
-        cross_file.extend(single_use_findings(&options.root));
+        cross_file.extend(graph_findings(&options.root));
         if let Some(filter) = &scope_filter {
             cross_file.retain(|diagnostic| {
                 !filter.lines_only || {
@@ -259,31 +259,38 @@ fn process_file(root: &Path, path: &Path, options: LintOptions) -> Option<FileOu
     })
 }
 
-/// Build the repo-wide symbol graph and emit `agent-no-single-use-helper`
-/// findings — exported helpers imported by exactly one module. Reads each
-/// flagged definition's source line for the diagnostic snippet.
+/// Build the repo-wide symbol graph once and emit the cross-file graph rules —
+/// `agent-no-single-use-helper` (exported helper imported by one module) and
+/// `agent-circular-import` (import cycles). Reads each flagged definition's
+/// source line for the diagnostic snippet.
 ///
 /// NOTE: this parses the repo a second time (the per-file scan already parsed
 /// for lint/fn_index). It's gated to `--agent` and is the seam where the
 /// `Index` is meant to subsume the function index, after which both share one
 /// parse.
-fn single_use_findings(root: &Path) -> Vec<Diagnostic> {
+fn graph_findings(root: &Path) -> Vec<Diagnostic> {
     let index = crate::index::Index::build(root);
-    let hits = crate::single_use::analyze(index.graph());
-    // Cache each flagged file's source once; pull the single definition line.
+    let graph = index.graph();
     let mut sources: std::collections::HashMap<String, String> = std::collections::HashMap::new();
-    hits.iter()
-        .map(|hit| {
-            let source = sources
-                .entry(hit.file.clone())
-                .or_insert_with(|| fs::read_to_string(root.join(&hit.file)).unwrap_or_default());
-            let snippet = source
-                .lines()
-                .nth(hit.line.saturating_sub(1) as usize)
-                .unwrap_or_default()
-                .trim()
-                .to_string();
-            crate::single_use::to_diagnostic(hit, snippet)
-        })
-        .collect()
+    let mut line_at = |file: &str, line: u32| {
+        let source = sources
+            .entry(file.to_string())
+            .or_insert_with(|| fs::read_to_string(root.join(file)).unwrap_or_default());
+        source
+            .lines()
+            .nth(line.saturating_sub(1) as usize)
+            .unwrap_or_default()
+            .trim()
+            .to_string()
+    };
+    let mut findings = Vec::new();
+    for hit in crate::single_use::analyze(graph) {
+        let snippet = line_at(&hit.file, hit.line);
+        findings.push(crate::single_use::to_diagnostic(&hit, snippet));
+    }
+    for hit in crate::cycles::analyze(graph) {
+        let snippet = line_at(&hit.file, 1);
+        findings.push(crate::cycles::to_diagnostic(&hit, snippet));
+    }
+    findings
 }

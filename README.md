@@ -23,7 +23,7 @@ agent-doctor <dir>                      # scan everything
 agent-doctor <dir> --verbose --json     # full report / machine-readable
 agent-doctor --scope changed            # only files changed vs main (PR mode)
 agent-doctor --scope lines --base main  # only issues on lines you touched
-agent-doctor rules                      # list all 118 rules
+agent-doctor rules                      # list all 123 rules
 agent-doctor explain no-map-returning-effect   # why + how to rewrite it
 agent-doctor rules --json               # full catalog with rewrite recipes
 agent-doctor --deep                     # merge type-aware @effect/language-service findings
@@ -43,7 +43,7 @@ rewrites, search, and category filters. `npm run gen` regenerates its data from
 
 ## Status
 
-Early but real: **118 rules live** across correctness, idiomatic, architecture,
+Early but real: **123 rules live** across correctness, idiomatic, architecture,
 performance, and v4-migration categories — every rule ships with a bad→good rewrite
 recipe (`explain`), and 120+ integration tests cover the catalog (bad patterns fire,
 clean code stays silent; example coverage is test-enforced). Rule sources: the Effect-TS

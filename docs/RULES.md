@@ -171,7 +171,11 @@ refactor suggestion, not a violation. All AST-only; fire file-wide in any file i
 | `agent-no-ts-namespace` | info | AST | TS `namespace` → ES modules + named exports |
 | `agent-no-throw` | info | AST | `throw` outside Effect code → Result/Either or `Effect.fail` a tagged error |
 | `agent-no-delete` | info | AST | `delete obj.k` → build a new object without the key (rest / `Struct.omit`) |
-| `agent-duplicate-function` | info | AST | two functions in one file with a structurally identical body (renamed copy-paste) → extract a shared helper |
+| `agent-deep-nesting` | warn | AST | control-flow nested > 4 deep → guard clauses / early returns / extract a helper (ESLint `max-depth`) |
+| `agent-high-complexity` | warn | AST | cyclomatic complexity > 15 → split into smaller functions / Match (SonarJS default) |
+| `agent-too-many-params` | warn | AST | > 5 positional parameters → a single named options object |
+| `agent-deep-relative-import` | info | AST | `../../../` import → path alias / move shared code closer |
+| `agent-duplicate-function` | info | AST | two functions in one file with a structurally identical body + call set (renamed copy-paste) → extract a shared helper |
 
 These were mined from the opencode `AGENTS.md` and the Rogo TypeScript conventions; see the
 repo-root `AGENTS.md` for the prose version with sources. They fire only in files importing
@@ -191,6 +195,7 @@ location to reuse). All `info` — never scored. `project` detectability: needs 
 | `agent-similar-function-name` | info | project | same (non-generic) name defined in another file → likely a duplicate implementation |
 | `agent-similar-shape` | info | project | same param count + call set as another function → may accomplish the same goal another way |
 | `agent-no-single-use-helper` | info | project | exported helper imported by exactly one module → inline / co-locate unless it's a real reusable boundary |
+| `agent-circular-import` | warn | project | file participates in an import cycle (Tarjan SCC of the resolved import graph) → break the cycle (extract a leaf module / invert a dependency) |
 
 ## Scoring surfaces
 

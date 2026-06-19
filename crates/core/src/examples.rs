@@ -488,6 +488,26 @@ pub fn example_for(rule: &str) -> Option<RuleExample> {
             "delete payload.secret",
             "const { secret, ...payload } = input // build a new object without the key",
         ),
+        "agent-deep-nesting" => (
+            "for (const u of users) {\n  if (u.active) {\n    if (u.team) {\n      for (const r of u.roles) {\n        if (r.admin) grant(u, r)\n      }\n    }\n  }\n}",
+            "const admins = users\n  .filter((u) => u.active && u.team)\n  .flatMap((u) => u.roles.filter((r) => r.admin).map((r) => [u, r] as const))\nadmins.forEach(([u, r]) => grant(u, r))",
+        ),
+        "agent-high-complexity" => (
+            "function classify(x) {\n  if (a) {} else if (b) {} else if (c) {} // ...15+ branches\n}",
+            "const classify = (x: Input) =>\n  Match.value(x).pipe(\n    Match.when(isA, handleA),\n    Match.when(isB, handleB),\n    Match.orElse(handleDefault)\n  ) // each branch named, dispatch flat",
+        ),
+        "agent-too-many-params" => (
+            "function createUser(name, email, age, role, team, active, plan) {}",
+            "interface CreateUser {\n  name: string; email: string; age: number; role: Role; team: Team; active: boolean; plan: Plan\n}\nfunction createUser(input: CreateUser) {}",
+        ),
+        "agent-deep-relative-import" => (
+            "import { formatCredits } from \"../../../billing/format\"",
+            "import { formatCredits } from \"@billing/format\" // path alias\n// or move the shared helper closer to its consumers",
+        ),
+        "agent-circular-import" => (
+            "// user.ts\nimport { teamOf } from \"./team\"\n// team.ts\nimport { ownerOf } from \"./user\" // user ↔ team cycle",
+            "// types.ts — shared leaf module, no cycle\nexport interface User {}\nexport interface Team {}\n// user.ts / team.ts both import from \"./types\"",
+        ),
         _ => return None,
     };
     Some(RuleExample { bad, good })

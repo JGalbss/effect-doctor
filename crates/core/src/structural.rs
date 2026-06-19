@@ -30,6 +30,11 @@ pub struct Shape {
     pub len: usize,
     /// Declared parameter count.
     pub param_count: usize,
+    /// Deepest nesting of control-flow statements (if/for/while/switch/try).
+    pub max_depth: u32,
+    /// Cyclomatic complexity: 1 + decision points (branches, loops, cases,
+    /// catch, `?:`, `&&`/`||`/`??`).
+    pub complexity: u32,
     /// Names of functions / methods this body calls — the "what it does" set.
     pub callees: BTreeSet<String>,
 }
@@ -72,6 +77,9 @@ pub fn analyze(body: &FunctionBody, param_count: usize) -> Option<Shape> {
         sig: Vec::new(),
         histogram: [0; HIST],
         callees: BTreeSet::new(),
+        depth: 0,
+        max_depth: 0,
+        complexity: 1,
     };
     for statement in &body.statements {
         visitor.visit_statement(statement);
@@ -86,6 +94,8 @@ pub fn analyze(body: &FunctionBody, param_count: usize) -> Option<Shape> {
         histogram: visitor.histogram,
         len: visitor.sig.len(),
         param_count,
+        max_depth: visitor.max_depth,
+        complexity: visitor.complexity,
         callees: visitor.callees,
     })
 }
@@ -112,6 +122,9 @@ struct SignatureVisitor {
     sig: Vec<u8>,
     histogram: [u32; HIST],
     callees: BTreeSet<String>,
+    depth: u32,
+    max_depth: u32,
+    complexity: u32,
 }
 
 impl SignatureVisitor {
@@ -121,14 +134,52 @@ impl SignatureVisitor {
     }
 }
 
+/// Decision points a statement contributes to cyclomatic complexity, and
+/// whether it opens a new nesting level.
+fn statement_branching(statement: &Statement) -> (u32, bool) {
+    match statement {
+        Statement::IfStatement(_)
+        | Statement::ForStatement(_)
+        | Statement::ForOfStatement(_)
+        | Statement::ForInStatement(_)
+        | Statement::WhileStatement(_)
+        | Statement::DoWhileStatement(_) => (1, true),
+        Statement::SwitchStatement(switch) => (
+            switch
+                .cases
+                .iter()
+                .filter(|case| case.test.is_some())
+                .count() as u32,
+            true,
+        ),
+        Statement::TryStatement(try_stmt) => (u32::from(try_stmt.handler.is_some()), true),
+        _ => (0, false),
+    }
+}
+
 impl<'a> Visit<'a> for SignatureVisitor {
     fn visit_statement(&mut self, statement: &Statement<'a>) {
         self.push(statement_tag(statement));
+        let (branches, nests) = statement_branching(statement);
+        self.complexity += branches;
+        if !nests {
+            walk::walk_statement(self, statement);
+            return;
+        }
+        self.depth += 1;
+        self.max_depth = self.max_depth.max(self.depth);
         walk::walk_statement(self, statement);
+        self.depth -= 1;
     }
 
     fn visit_expression(&mut self, expression: &Expression<'a>) {
         self.push(expression_tag(expression));
+        if matches!(
+            expression,
+            Expression::ConditionalExpression(_) | Expression::LogicalExpression(_)
+        ) {
+            self.complexity += 1;
+        }
         walk::walk_expression(self, expression);
     }
 

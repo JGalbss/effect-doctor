@@ -120,3 +120,20 @@ fn flags_exported_helper_imported_by_one_module() {
         .expect("single-use finding");
     assert!(hit.message.contains("formatOne"), "got: {}", hit.message);
 }
+
+#[test]
+fn flags_circular_imports() {
+    // a -> b -> a is a 2-file cycle; standalone.ts is not.
+    let a = "import { b } from \"./b\"\nexport const a = () => b()\n";
+    let b = "import { a } from \"./a\"\nexport const b = () => a()\n";
+    let standalone = "export const c = () => 1\n";
+    let diagnostics = scan_agent(
+        "cycles",
+        &[("a.ts", a), ("b.ts", b), ("standalone.ts", standalone)],
+    );
+    // Both files in the cycle are flagged; standalone is not.
+    assert_eq!(count(&diagnostics, "agent-circular-import"), 2);
+    assert!(diagnostics
+        .iter()
+        .any(|d| d.rule == "agent-circular-import" && d.message.contains("import cycle")));
+}

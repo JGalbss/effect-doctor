@@ -171,6 +171,43 @@ static DELETE_OP: RuleMeta = RuleMeta {
     help: "`delete` mutates an object in place and deoptimizes it. Build a new object without the key (destructure-and-rest, or `Struct.omit`) instead.",
 };
 
+static DEEP_NESTING: RuleMeta = RuleMeta {
+    id: "agent-deep-nesting",
+    severity: Severity::Warn,
+    category: Category::AgentHygiene,
+    help: "Deeply nested control flow is hard to follow. Flatten with guard clauses / early returns, extract the inner block into a named helper, or replace branching with Match / Array combinators.",
+};
+
+static HIGH_COMPLEXITY: RuleMeta = RuleMeta {
+    id: "agent-high-complexity",
+    severity: Severity::Warn,
+    category: Category::AgentHygiene,
+    help: "This function has high cyclomatic complexity (too many branches/loops/conditions). Split it into smaller named functions, or replace the branching with Match / a lookup / an Effect pipeline.",
+};
+
+static TOO_MANY_PARAMS: RuleMeta = RuleMeta {
+    id: "agent-too-many-params",
+    severity: Severity::Warn,
+    category: Category::AgentHygiene,
+    help: "A long positional parameter list is error-prone at the call site. Pass a single named options object (or a Schema-validated input).",
+};
+
+static DEEP_RELATIVE_IMPORT: RuleMeta = RuleMeta {
+    id: "agent-deep-relative-import",
+    severity: Severity::Info,
+    category: Category::AgentHygiene,
+    help: "A deep relative import (`../../../`) is brittle and signals a module reaching across the architecture. Use a path alias / package entry point, or move the shared code closer.",
+};
+
+/// ESLint `max-depth` default — flag nesting deeper than this.
+const MAX_DEPTH: u32 = 4;
+/// SonarJS cognitive-complexity default — flag functions above this.
+const MAX_COMPLEXITY: u32 = 15;
+/// Flag functions with more positional parameters than this.
+const MAX_PARAMS: usize = 5;
+/// Flag relative imports climbing at least this many directories.
+const MAX_PARENT_HOPS: usize = 3;
+
 static INLINE_TYPE_IMPORT: RuleMeta = RuleMeta {
     id: "agent-no-inline-type-import",
     severity: Severity::Warn,
@@ -276,7 +313,10 @@ fn mutation_kind(target: &AssignmentTarget) -> &'static str {
 pub struct AgentHygiene;
 
 impl AgentHygiene {
-    fn record_body(
+    /// Per-function checks that share the single structural walk: parameter
+    /// count, then (for non-trivial bodies) the dup fingerprint plus the
+    /// nesting-depth and cyclomatic-complexity metrics.
+    fn check_function(
         &self,
         body: Option<&FunctionBody>,
         param_count: usize,
@@ -286,11 +326,39 @@ impl AgentHygiene {
         if !ctx.agent_active() {
             return;
         }
+        if param_count > MAX_PARAMS {
+            ctx.report_agent(
+                &TOO_MANY_PARAMS,
+                keyword_span(span, 1),
+                format!("{param_count} parameters — pass a single named options object"),
+            );
+        }
         let Some(body) = body else { return };
-        if let Some(shape) = structural::analyze(body, param_count) {
-            ctx.scratch
-                .fn_fingerprints
-                .push((shape.identity_hash(), span));
+        let Some(shape) = structural::analyze(body, param_count) else {
+            return;
+        };
+        ctx.scratch
+            .fn_fingerprints
+            .push((shape.identity_hash(), span));
+        if shape.max_depth > MAX_DEPTH {
+            ctx.report_agent(
+                &DEEP_NESTING,
+                keyword_span(span, 1),
+                format!(
+                    "nested {} levels deep — flatten with guard clauses or extract a helper",
+                    shape.max_depth
+                ),
+            );
+        }
+        if shape.complexity > MAX_COMPLEXITY {
+            ctx.report_agent(
+                &HIGH_COMPLEXITY,
+                keyword_span(span, 1),
+                format!(
+                    "cyclomatic complexity {} — split into smaller functions or use Match",
+                    shape.complexity
+                ),
+            );
         }
     }
 }
@@ -320,6 +388,10 @@ impl Rule for AgentHygiene {
             &TS_NAMESPACE,
             &THROW,
             &DELETE_OP,
+            &DEEP_NESTING,
+            &HIGH_COMPLEXITY,
+            &TOO_MANY_PARAMS,
+            &DEEP_RELATIVE_IMPORT,
             &DUPLICATE_FUNCTION,
         ];
         METAS
@@ -427,8 +499,16 @@ impl Rule for AgentHygiene {
     }
 
     fn on_import(&self, import: &ImportDeclaration<'_>, ctx: &mut FileCtx) {
-        if !ctx.agent_active() || is_effect_module(import.source.value.as_str()) {
+        let source = import.source.value.as_str();
+        if !ctx.agent_active() || is_effect_module(source) {
             return;
+        }
+        if source.split('/').filter(|segment| *segment == "..").count() >= MAX_PARENT_HOPS {
+            ctx.report_agent(
+                &DEEP_RELATIVE_IMPORT,
+                import.source.span,
+                format!("`{source}` reaches across the tree — use a path alias or move the shared code closer"),
+            );
         }
         let Some(specifiers) = import.specifiers.as_ref() else {
             return;
@@ -650,7 +730,7 @@ impl Rule for AgentHygiene {
     }
 
     fn on_function(&self, function: &Function<'_>, ctx: &mut FileCtx) {
-        self.record_body(
+        self.check_function(
             function.body.as_deref(),
             function.params.items.len(),
             function.span,
@@ -659,7 +739,7 @@ impl Rule for AgentHygiene {
     }
 
     fn on_arrow(&self, arrow: &ArrowFunctionExpression<'_>, ctx: &mut FileCtx) {
-        self.record_body(Some(&arrow.body), arrow.params.items.len(), arrow.span, ctx);
+        self.check_function(Some(&arrow.body), arrow.params.items.len(), arrow.span, ctx);
     }
 
     fn on_file_end(&self, ctx: &mut FileCtx) {

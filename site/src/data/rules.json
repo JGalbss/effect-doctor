@@ -888,6 +888,38 @@
     "severity": "info"
   },
   {
+    "bad": "for (const u of users) {\n  if (u.active) {\n    if (u.team) {\n      for (const r of u.roles) {\n        if (r.admin) grant(u, r)\n      }\n    }\n  }\n}",
+    "category": "Agent hygiene",
+    "good": "const admins = users\n  .filter((u) => u.active && u.team)\n  .flatMap((u) => u.roles.filter((r) => r.admin).map((r) => [u, r] as const))\nadmins.forEach(([u, r]) => grant(u, r))",
+    "help": "Deeply nested control flow is hard to follow. Flatten with guard clauses / early returns, extract the inner block into a named helper, or replace branching with Match / Array combinators.",
+    "id": "agent-deep-nesting",
+    "severity": "warn"
+  },
+  {
+    "bad": "function classify(x) {\n  if (a) {} else if (b) {} else if (c) {} // ...15+ branches\n}",
+    "category": "Agent hygiene",
+    "good": "const classify = (x: Input) =>\n  Match.value(x).pipe(\n    Match.when(isA, handleA),\n    Match.when(isB, handleB),\n    Match.orElse(handleDefault)\n  ) // each branch named, dispatch flat",
+    "help": "This function has high cyclomatic complexity (too many branches/loops/conditions). Split it into smaller named functions, or replace the branching with Match / a lookup / an Effect pipeline.",
+    "id": "agent-high-complexity",
+    "severity": "warn"
+  },
+  {
+    "bad": "function createUser(name, email, age, role, team, active, plan) {}",
+    "category": "Agent hygiene",
+    "good": "interface CreateUser {\n  name: string; email: string; age: number; role: Role; team: Team; active: boolean; plan: Plan\n}\nfunction createUser(input: CreateUser) {}",
+    "help": "A long positional parameter list is error-prone at the call site. Pass a single named options object (or a Schema-validated input).",
+    "id": "agent-too-many-params",
+    "severity": "warn"
+  },
+  {
+    "bad": "import { formatCredits } from \"../../../billing/format\"",
+    "category": "Agent hygiene",
+    "good": "import { formatCredits } from \"@billing/format\" // path alias\n// or move the shared helper closer to its consumers",
+    "help": "A deep relative import (`../../../`) is brittle and signals a module reaching across the architecture. Use a path alias / package entry point, or move the shared code closer.",
+    "id": "agent-deep-relative-import",
+    "severity": "info"
+  },
+  {
     "bad": "const usageBarFill = (p) => p >= 100 ? red : p >= 80 ? amber : gray\nconst usageText = (p) => p >= 100 ? red : p >= 80 ? amber : gray // copy-paste",
     "category": "Agent hygiene",
     "good": "const usageTone = (p) => p >= 100 ? red : p >= 80 ? amber : gray\nconst usageBarFill = usageTone\nconst usageText = usageTone",
@@ -934,6 +966,14 @@
     "help": "An exported helper imported by exactly one other module is usually premature extraction. Inline it at the call site or co-locate it, unless it hides a genuinely complex boundary or has a clear independent name. (opencode: \"do not extract single-use helpers preemptively\".)",
     "id": "agent-no-single-use-helper",
     "severity": "info"
+  },
+  {
+    "bad": "// user.ts\nimport { teamOf } from \"./team\"\n// team.ts\nimport { ownerOf } from \"./user\" // user ↔ team cycle",
+    "category": "Agent hygiene",
+    "good": "// types.ts — shared leaf module, no cycle\nexport interface User {}\nexport interface Team {}\n// user.ts / team.ts both import from \"./types\"",
+    "help": "This file is part of an import cycle. Cycles couple modules, defeat tree-shaking, and cause initialization-order bugs. Break it: extract the shared types/values into a leaf module, or invert one of the dependencies.",
+    "id": "agent-circular-import",
+    "severity": "warn"
   },
   {
     "bad": "// @ts-ignore\nconst total = sum(values)",

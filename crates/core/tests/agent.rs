@@ -295,3 +295,36 @@ fn flags_delete_operator() {
     let source = src("export const scrub = (payload: { secret?: string }) => {\n  delete payload.secret\n  return payload\n}\n");
     assert_fires_agent(&source, "agent-no-delete", 1);
 }
+
+#[test]
+fn flags_deep_nesting() {
+    let source = src("export const f = (xs: number[][][]) => {\n  for (const a of xs) {\n    for (const b of a) {\n      for (const c of b) {\n        if (c > 0) {\n          if (c > 10) {\n            sink(c)\n          }\n        }\n      }\n    }\n  }\n}\n");
+    assert_fires_agent(&source, "agent-deep-nesting", 1);
+}
+
+#[test]
+fn flags_too_many_params() {
+    let many = src("export const f = (a: 1, b: 2, c: 3, d: 4, e: 5, g: 6) => a\n");
+    assert_fires_agent(&many, "agent-too-many-params", 1);
+    let few = src("export const f = (a: 1, b: 2) => a\n");
+    assert_fires_agent(&few, "agent-too-many-params", 0);
+}
+
+#[test]
+fn flags_deep_relative_import() {
+    let deep = format!("{PRELUDE}import {{ x }} from \"../../../shared/x\"\nexport const y = x\n");
+    assert_fires_agent(&deep, "agent-deep-relative-import", 1);
+    let shallow = format!("{PRELUDE}import {{ x }} from \"../shared/x\"\nexport const y = x\n");
+    assert_fires_agent(&shallow, "agent-deep-relative-import", 0);
+}
+
+#[test]
+fn flags_high_complexity() {
+    // ~18 decision points via a chain of independent ifs.
+    let mut body = String::from("export const f = (n: number) => {\n  let r = 0\n");
+    for i in 0..18 {
+        body.push_str(&format!("  if (n === {i}) r = {i}\n"));
+    }
+    body.push_str("  return r\n}\n");
+    assert_fires_agent(&src(&body), "agent-high-complexity", 1);
+}

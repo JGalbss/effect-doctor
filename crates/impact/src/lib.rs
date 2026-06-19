@@ -87,13 +87,22 @@ pub fn select(graph: &SymbolGraph, changed: &[String], config: &ImpactConfig) ->
 fn caveats(graph: &SymbolGraph, affected: &BTreeSet<String>) -> Vec<String> {
     let dynamic: Vec<&str> = affected
         .iter()
-        .filter(|file| graph.file(file).is_some_and(|symbols| symbols.dynamic_imports))
+        .filter(|file| {
+            graph
+                .file(file)
+                .is_some_and(|symbols| symbols.dynamic_imports)
+        })
         .map(String::as_str)
         .collect();
     if dynamic.is_empty() {
         return Vec::new();
     }
-    let sample = dynamic.iter().take(3).copied().collect::<Vec<_>>().join(", ");
+    let sample = dynamic
+        .iter()
+        .take(3)
+        .copied()
+        .collect::<Vec<_>>()
+        .join(", ");
     vec![format!(
         "{} affected file(s) use dynamic import()/require() ({sample}{}) — \
          dependencies may be hidden and selection can under-approximate; \
@@ -111,7 +120,10 @@ mod tests {
     fn fixture() -> SymbolGraph {
         let mut graph = SymbolGraph::new();
         graph.add_file("src/math.ts", "export function add(a, b) { return a + b }");
-        graph.add_file("src/calc.ts", "import { add } from './math'\nexport const c = add");
+        graph.add_file(
+            "src/calc.ts",
+            "import { add } from './math'\nexport const c = add",
+        );
         graph.add_file("test/math.test.ts", "import { add } from '../src/math'");
         graph.add_file("test/calc.test.ts", "import { c } from '../src/calc'");
         graph
@@ -120,17 +132,28 @@ mod tests {
     #[test]
     fn selects_direct_and_transitive_tests() {
         let graph = fixture();
-        let result = select(&graph, &["src/math.ts".to_string()], &ImpactConfig::default());
+        let result = select(
+            &graph,
+            &["src/math.ts".to_string()],
+            &ImpactConfig::default(),
+        );
         assert_eq!(
             result.tests,
-            vec!["test/calc.test.ts".to_string(), "test/math.test.ts".to_string()]
+            vec![
+                "test/calc.test.ts".to_string(),
+                "test/math.test.ts".to_string()
+            ]
         );
     }
 
     #[test]
     fn narrow_change_selects_only_reaching_tests() {
         let graph = fixture();
-        let result = select(&graph, &["src/calc.ts".to_string()], &ImpactConfig::default());
+        let result = select(
+            &graph,
+            &["src/calc.ts".to_string()],
+            &ImpactConfig::default(),
+        );
         assert_eq!(result.tests, vec!["test/calc.test.ts".to_string()]);
     }
 
@@ -148,9 +171,19 @@ mod tests {
     #[test]
     fn dynamic_import_raises_caveat() {
         let mut graph = SymbolGraph::new();
-        graph.add_file("src/loader.ts", "export const load = () => import('./plugin')");
-        graph.add_file("test/loader.test.ts", "import { load } from '../src/loader'");
-        let result = select(&graph, &["src/loader.ts".to_string()], &ImpactConfig::default());
+        graph.add_file(
+            "src/loader.ts",
+            "export const load = () => import('./plugin')",
+        );
+        graph.add_file(
+            "test/loader.test.ts",
+            "import { load } from '../src/loader'",
+        );
+        let result = select(
+            &graph,
+            &["src/loader.ts".to_string()],
+            &ImpactConfig::default(),
+        );
         assert_eq!(result.tests, vec!["test/loader.test.ts".to_string()]);
         assert_eq!(result.caveats.len(), 1);
         assert!(result.caveats[0].contains("dynamic"));
@@ -159,7 +192,11 @@ mod tests {
     #[test]
     fn no_caveat_when_static() {
         let graph = fixture();
-        let result = select(&graph, &["src/math.ts".to_string()], &ImpactConfig::default());
+        let result = select(
+            &graph,
+            &["src/math.ts".to_string()],
+            &ImpactConfig::default(),
+        );
         assert!(result.caveats.is_empty());
     }
 }
