@@ -1,0 +1,7 @@
+{
+  "agent-doctor": {
+    "command": "npx",
+    "args": ["-y", "@jgalbsss/agent-doctor", "serve", "--mcp"],
+    "transport": "stdio"
+  }
+}

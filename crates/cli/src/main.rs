@@ -679,7 +679,7 @@ const STATE_GITIGNORE: &str = "# agent-doctor local state — do not commit\n*\n
 
 /// The Claude Code skill, embedded from the canonical source so there is exactly
 /// one copy to maintain.
-const SKILL: &str = include_str!("../../../skills/agent-doctor/SKILL.md");
+const SKILL: &str = include_str!("../../../plugins/agent-doctor/skills/agent-doctor/SKILL.md");
 
 /// `agent-doctor init` — scaffold the toolkit. In a terminal it's an interactive
 /// walkthrough; with `--yes` or in a non-TTY it uses flags/defaults. Idempotent:

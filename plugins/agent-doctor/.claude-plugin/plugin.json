@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "agent-doctor",
+  "displayName": "agent-doctor",
+  "version": "0.2.0",
+  "description": "Deterministic toolkit for coding agents: gate diffs (policy/ACL/leases), select impacted tests, semantic-merge TypeScript, and a context server. Bundles a skill, the MCP server, slash commands, and a commit-gate hook.",
+  "author": { "name": "JGalbss", "url": "https://github.com/JGalbss/agent-doctor" },
+  "homepage": "https://effect.doctor/toolkit",
+  "repository": "https://github.com/JGalbss/agent-doctor",
+  "license": "MIT",
+  "keywords": ["testing", "merge", "policy", "agents", "typescript"]
+}

@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/commit-gate.sh\"",
+            "timeout": 120,
+            "statusMessage": "agent-doctor: gating commit/submit…"
+          }
+        ]
+      }
+    ]
+  }
+}
