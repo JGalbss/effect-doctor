@@ -7,6 +7,7 @@ name = "agent-doctor"
 version = "0.1.1"
 dependencies = [
  "agent_doctor_core",
+ "agent_doctor_impact",
  "anstyle",
  "clap",
  "lsp-server",

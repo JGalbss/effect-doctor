@@ -104,6 +104,18 @@ enum Command {
     },
     /// Run as a language server over stdio (editor diagnostics)
     Lsp,
+    /// Select the tests impacted by the working diff (impact-based selection)
+    Impact {
+        /// Diff base ref (default: merge-base with main)
+        #[arg(long)]
+        base: Option<String>,
+        /// Emit the result as JSON
+        #[arg(long)]
+        json: bool,
+        /// Tests to always include regardless of the diff (repeatable)
+        #[arg(long = "always-run")]
+        always_run: Vec<String>,
+    },
 }
 
 fn run_explain(rule_id: &str) -> ExitCode {
@@ -191,6 +203,73 @@ fn run_rules(json: bool) -> ExitCode {
     ExitCode::SUCCESS
 }
 
+/// `agent-doctor impact` — build the index, diff against the base, and report
+/// the tests reaching the change.
+fn run_impact(
+    root: &std::path::Path,
+    base: Option<&str>,
+    json: bool,
+    always_run: Vec<String>,
+) -> ExitCode {
+    let resolved_base = match agent_doctor_core::resolve_base(root, base) {
+        Ok(base) => base,
+        Err(error) => {
+            eprintln!("agent-doctor impact: {error}");
+            return ExitCode::from(2);
+        }
+    };
+    let diff = match agent_doctor_core::collect_diff(root, &resolved_base, false) {
+        Ok(diff) => diff,
+        Err(error) => {
+            eprintln!("agent-doctor impact: {error}");
+            return ExitCode::from(2);
+        }
+    };
+    let mut changed: Vec<String> = diff.files.keys().cloned().collect();
+    changed.sort();
+    let index = agent_doctor_core::Index::build(root);
+    let result = agent_doctor_impact::select(
+        index.graph(),
+        &changed,
+        &agent_doctor_impact::ImpactConfig { always_run },
+    );
+
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&result).expect("serializable impact result")
+        );
+        return ExitCode::SUCCESS;
+    }
+
+    let p = palette();
+    println!();
+    println!(
+        "  {}impact{}  {}{} changed file{} → {} test{} to run{}",
+        p.bold,
+        p.reset,
+        p.dim,
+        changed.len(),
+        plural(changed.len()),
+        result.tests.len(),
+        plural(result.tests.len()),
+        p.reset
+    );
+    println!();
+    for test in &result.tests {
+        println!("  {}{}{}", p.cyan, test, p.reset);
+    }
+    if result.tests.is_empty() {
+        println!("  {}no tests reach this change{}", p.dim, p.reset);
+    }
+    for caveat in &result.caveats {
+        println!();
+        println!("  {}⚠ {}{}", p.yellow, caveat, p.reset);
+    }
+    println!();
+    ExitCode::SUCCESS
+}
+
 fn main() -> ExitCode {
     let cli = Cli::parse();
     match &cli.command {
@@ -203,6 +282,11 @@ fn main() -> ExitCode {
             }
             return ExitCode::SUCCESS;
         }
+        Some(Command::Impact {
+            base,
+            json,
+            always_run,
+        }) => return run_impact(&cli.path, base.as_deref(), *json, always_run.clone()),
         None => {}
     }
     let result = match scan(&ScanOptions {
