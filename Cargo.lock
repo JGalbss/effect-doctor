@@ -100,7 +100,11 @@ dependencies = [
 name = "agent_doctor_vcs"
 version = "0.1.1"
 dependencies = [
+ "agent_doctor_core",
  "agent_doctor_merge",
+ "agent_doctor_policy",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

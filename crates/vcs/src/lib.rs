@@ -6,12 +6,19 @@
 //! engine) can swap in later without touching the orchestrator. The semantic
 //! 3-way merge is VCS-agnostic and provided as a default method over the trait.
 //!
-//! [`GitVcs`] is the shell-to-git implementation used today.
+//! [`GitVcs`] is the shell-to-git implementation used today. [`Repo`] composes
+//! it with the agent-native model (op-log + leases + semantic merge).
+
+mod oplog;
+mod repo;
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use agent_doctor_merge::{merge, MergeResult};
+
+pub use oplog::{OpKind, OpLog, Operation};
+pub use repo::Repo;
 
 /// The operations the toolkit needs from a version-control backend.
 pub trait Vcs {
