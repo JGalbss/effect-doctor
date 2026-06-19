@@ -202,3 +202,155 @@ fn serve_answers_a_query_over_stdio() {
 
     std::fs::remove_dir_all(&dir).ok();
 }
+
+#[test]
+fn serve_mcp_handshake_and_tool_call() {
+    let dir = temp_dir("mcp");
+    write(&dir, "a.ts", "export function foo() {}\n");
+    let mut child = Command::new(BIN)
+        .current_dir(&dir)
+        .args(["serve", "--mcp"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(
+            b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}\n\
+              {\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"symbol_exists\",\"arguments\":{\"name\":\"foo\"}}}\n",
+        )
+        .unwrap();
+    let out = child.wait_with_output().unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("protocolVersion"), "got: {stdout}");
+    assert!(stdout.contains("foo"), "got: {stdout}");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn merge_real_conflict_writes_markers_and_exits_nonzero() {
+    let dir = temp_dir("conflict");
+    write(&dir, "base.ts", "export const x = 1\n");
+    write(&dir, "ours.ts", "export const x = 2\n");
+    write(&dir, "theirs.ts", "export const x = 3\n");
+    let out = Command::new(BIN)
+        .current_dir(&dir)
+        .args(["merge", "base.ts", "ours.ts", "theirs.ts", "--output", "out.ts"])
+        .output()
+        .unwrap();
+    assert!(!out.status.success(), "same-decl conflict must fail");
+    let merged = std::fs::read_to_string(dir.join("out.ts")).unwrap();
+    assert!(merged.contains("<<<<<<<"), "expected conflict markers");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn gate_flags_layering_violation() {
+    let dir = temp_dir("layer");
+    init_repo(&dir);
+    write(&dir, "src/ui/button.ts", "export const b = 1\n");
+    write(&dir, "src/core/engine.ts", "export const e = 1\n");
+    git(&dir, &["add", "-A"]);
+    git(&dir, &["commit", "-qm", "base"]);
+    // introduce an illegal core→ui import.
+    write(&dir, "src/core/engine.ts", "import { b } from '../ui/button'\nexport const e = b\n");
+    git(&dir, &["commit", "-qam", "bad import"]);
+    write(
+        &dir,
+        "layer.toml",
+        "[[layer]]\nname = \"core\"\npath = \"src/core/**\"\nforbid_imports_from = [\"src/ui/**\"]\n",
+    );
+    let out = Command::new(BIN)
+        .current_dir(&dir)
+        .args(["gate", "--base", "HEAD~1", "--policy", "layer.toml", "--json"])
+        .output()
+        .unwrap();
+    assert!(!out.status.success(), "layering violation must fail the gate");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("layering"), "got: {stdout}");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn gate_enforces_leases_per_actor() {
+    let dir = temp_dir("lease");
+    init_repo(&dir);
+    write(&dir, "src/auth/login.ts", "export const a = 1\n");
+    git(&dir, &["add", "-A"]);
+    git(&dir, &["commit", "-qm", "base"]);
+    write(&dir, "src/auth/login.ts", "export const a = 2\n");
+    git(&dir, &["commit", "-qam", "change"]);
+    // agent-a owns src/auth/**.
+    write(
+        &dir,
+        "leases.json",
+        "{\"leases\":[{\"actor\":\"agent-a\",\"task_id\":\"t1\",\"globs\":[\"src/auth/**\"]}]}",
+    );
+
+    let intruder = Command::new(BIN)
+        .current_dir(&dir)
+        .args(["gate", "--base", "HEAD~1", "--actor", "agent-b", "--leases", "leases.json"])
+        .output()
+        .unwrap();
+    assert!(!intruder.status.success(), "agent-b is outside the lease");
+
+    let owner = Command::new(BIN)
+        .current_dir(&dir)
+        .args(["gate", "--base", "HEAD~1", "--actor", "agent-a", "--leases", "leases.json"])
+        .output()
+        .unwrap();
+    assert!(owner.status.success(), "agent-a owns the region");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn orchestrate_runs_a_ledger_through_the_loop() {
+    let dir = temp_dir("orch");
+    write(&dir, "src/app.ts", "export const a = 1\n");
+    // an executor: ignore stdin, emit an outcome editing src/app.ts.
+    let script = dir.join("exec.sh");
+    std::fs::write(
+        &script,
+        "#!/bin/sh\ncat >/dev/null\nprintf '%s' '{\"changes\":[{\"path\":\"src/app.ts\",\"new_source\":\"export const a = 2\"}],\"summary\":\"done\"}'\n",
+    )
+    .unwrap();
+    set_executable(&script);
+    write(
+        &dir,
+        "ledger.json",
+        "{\"tasks\":[{\"id\":\"t1\",\"intent\":\"edit app\",\"targets\":[\"src/app.ts\"],\"status\":\"pending\"}]}",
+    );
+
+    let out = Command::new(BIN)
+        .current_dir(&dir)
+        .args([
+            "orchestrate",
+            "--ledger",
+            "ledger.json",
+            "--executor",
+            script.to_str().unwrap(),
+            "--policy",
+            "nonexistent.toml",
+        ])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "stderr: {}", String::from_utf8_lossy(&out.stderr));
+    // the ledger is written back with the task marked done.
+    let ledger = std::fs::read_to_string(dir.join("ledger.json")).unwrap();
+    assert!(ledger.contains("\"done\""), "ledger: {ledger}");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[cfg(unix)]
+fn set_executable(path: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    let mut perms = std::fs::metadata(path).unwrap().permissions();
+    perms.set_mode(0o755);
+    std::fs::set_permissions(path, perms).unwrap();
+}
+
+#[cfg(not(unix))]
+fn set_executable(_path: &Path) {}

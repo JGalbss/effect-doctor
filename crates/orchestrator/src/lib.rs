@@ -8,12 +8,15 @@
 //!   → gate the diff → on violation, retry with the exact findings as feedback
 //!   → on clean, select impacted tests → release lease.
 
+mod executor;
 mod footprint;
 mod ledger;
 
 use agent_doctor_policy::{Lease, LeaseSet, Violation};
 use agent_doctor_server::{ContextPack, Kernel};
+use serde::{Deserialize, Serialize};
 
+pub use executor::CommandExecutor;
 pub use footprint::{estimate_footprint, frontier_dedup, Draft, FileChange, FrontierDup};
 pub use ledger::{Ledger, Task, TaskStatus};
 
@@ -28,8 +31,10 @@ pub struct TaskSpec {
 }
 
 /// What the executor returns.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskOutcome {
     pub changes: Vec<FileChange>,
+    #[serde(default)]
     pub summary: String,
 }
 
@@ -121,6 +126,35 @@ pub fn run_task(
         }
         feedback = violations.iter().map(format_violation).collect();
     }
+}
+
+/// Drive an entire ledger: repeatedly run all ready tasks (deps satisfied),
+/// updating each task's status, until none remain runnable. Dependents unlock as
+/// their prerequisites complete. Returns a report per task run.
+pub fn run_ledger(
+    kernel: &Kernel,
+    leases: &mut LeaseSet,
+    actor: &str,
+    ledger: &mut Ledger,
+    executor: &mut dyn Executor,
+    config: &RunConfig,
+) -> Vec<TaskReport> {
+    let mut reports = Vec::new();
+    loop {
+        let ready: Vec<String> = ledger.ready().iter().map(|task| task.id.clone()).collect();
+        if ready.is_empty() {
+            break;
+        }
+        for id in ready {
+            let Some(task) = ledger.get(&id).cloned() else {
+                continue;
+            };
+            let report = run_task(kernel, leases, actor, &task, executor, config);
+            ledger.set_status(&id, report.status);
+            reports.push(report);
+        }
+    }
+    reports
 }
 
 /// The lease region for a task: its declared targets, or — if it declared none —
@@ -293,6 +327,43 @@ mod tests {
         assert_eq!(report.status, TaskStatus::Failed);
         assert!(!report.violations.is_empty());
         assert!(leases.leases.is_empty(), "lease released on failure");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    struct AlwaysOk;
+    impl Executor for AlwaysOk {
+        fn run(&mut self, _spec: &TaskSpec) -> Result<TaskOutcome, String> {
+            Ok(TaskOutcome {
+                changes: vec![change("src/app.ts")],
+                summary: "ok".to_string(),
+            })
+        }
+    }
+
+    #[test]
+    fn run_ledger_drives_dag_to_completion() {
+        let dir = temp_project(&[("src/app.ts", "export const a = 1")]);
+        let kernel = kernel(&dir);
+        let mut leases = LeaseSet::default();
+        let mut ledger = Ledger::new();
+        ledger.add(Task::new("a", "first").with_targets(&["src/app.ts"]));
+        ledger.add(
+            Task::new("b", "second")
+                .with_deps(&["a"])
+                .with_targets(&["src/app.ts"]),
+        );
+        let mut exec = AlwaysOk;
+        let reports = run_ledger(
+            &kernel,
+            &mut leases,
+            "agent",
+            &mut ledger,
+            &mut exec,
+            &RunConfig::default(),
+        );
+        assert_eq!(reports.len(), 2);
+        assert!(reports.iter().all(|r| r.status == TaskStatus::Done));
+        assert_eq!(ledger.get("b").unwrap().status, TaskStatus::Done);
         std::fs::remove_dir_all(&dir).ok();
     }
 

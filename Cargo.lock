@@ -9,6 +9,7 @@ dependencies = [
  "agent_doctor_core",
  "agent_doctor_impact",
  "agent_doctor_merge",
+ "agent_doctor_orchestrator",
  "agent_doctor_policy",
  "agent_doctor_server",
  "anstyle",

@@ -12,9 +12,10 @@ use std::collections::BTreeMap;
 use agent_doctor_core::SymbolGraph;
 use agent_doctor_policy::glob;
 use agent_doctor_server::Kernel;
+use serde::{Deserialize, Serialize};
 
 /// One file an in-flight task proposes to write.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileChange {
     pub path: String,
     pub new_source: String,

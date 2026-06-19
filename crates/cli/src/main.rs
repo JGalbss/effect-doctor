@@ -167,6 +167,27 @@ enum Command {
         #[arg(long)]
         force: bool,
     },
+    /// Run a task ledger through the deterministic loop with a pluggable agent
+    Orchestrate {
+        /// Ledger JSON file (tasks); statuses are written back after the run
+        #[arg(long, default_value = ".agent-doctor/ledger.json")]
+        ledger: PathBuf,
+        /// Acting agent id
+        #[arg(long, default_value = "agent")]
+        actor: String,
+        /// Executor command (JSON spec on stdin → outcome JSON on stdout)
+        #[arg(long)]
+        executor: String,
+        /// Policy file
+        #[arg(long, default_value = "agent-doctor.policy.toml")]
+        policy: PathBuf,
+        /// Leases file
+        #[arg(long, default_value = ".agent-doctor/leases.json")]
+        leases: PathBuf,
+        /// Retries after a gate denial
+        #[arg(long, default_value_t = 2)]
+        max_retries: u32,
+    },
 }
 
 fn run_explain(rule_id: &str) -> ExitCode {
@@ -625,6 +646,94 @@ fn append_attributes(root: &std::path::Path, p: &Palette) {
     }
 }
 
+/// `agent-doctor orchestrate` — drive a task ledger through the deterministic
+/// loop, dispatching each task to the executor command. Writes ledger statuses
+/// back; exits non-zero if any task failed.
+#[allow(clippy::too_many_arguments)]
+fn run_orchestrate(
+    root: &std::path::Path,
+    ledger_path: &std::path::Path,
+    actor: &str,
+    executor_cmd: &str,
+    policy: &std::path::Path,
+    leases_path: &std::path::Path,
+    max_retries: u32,
+) -> ExitCode {
+    use agent_doctor_orchestrator::{
+        run_ledger, CommandExecutor, Ledger, RunConfig, TaskStatus,
+    };
+
+    let mut parts = executor_cmd.split_whitespace().map(str::to_string);
+    let Some(program) = parts.next() else {
+        eprintln!("agent-doctor orchestrate: empty --executor command");
+        return ExitCode::from(2);
+    };
+    let args: Vec<String> = parts.collect();
+
+    let kernel = match agent_doctor_server::Kernel::build(root, policy, leases_path) {
+        Ok(kernel) => kernel,
+        Err(error) => {
+            eprintln!("agent-doctor orchestrate: {error}");
+            return ExitCode::from(2);
+        }
+    };
+    let mut ledger = match Ledger::load(ledger_path) {
+        Ok(ledger) => ledger,
+        Err(error) => {
+            eprintln!("agent-doctor orchestrate: ledger: {error}");
+            return ExitCode::from(2);
+        }
+    };
+    if ledger.has_cycle() {
+        eprintln!("agent-doctor orchestrate: ledger has a dependency cycle or dangling dep");
+        return ExitCode::from(2);
+    }
+    let mut leases = agent_doctor_policy::LeaseSet::load(leases_path).unwrap_or_default();
+    let mut executor = CommandExecutor::new(program, args);
+
+    let reports = run_ledger(
+        &kernel,
+        &mut leases,
+        actor,
+        &mut ledger,
+        &mut executor,
+        &RunConfig { max_retries },
+    );
+    if let Err(error) = ledger.save(ledger_path) {
+        eprintln!("agent-doctor orchestrate: save ledger: {error}");
+    }
+
+    let p = palette();
+    println!();
+    let failures = reports
+        .iter()
+        .filter(|report| report.status == TaskStatus::Failed)
+        .count();
+    for report in &reports {
+        let mark = match report.status {
+            TaskStatus::Done => p.green,
+            TaskStatus::Failed => p.red,
+            _ => p.yellow,
+        };
+        println!(
+            "  {}{:?}{} {} ({} attempt{}, {} test{})",
+            mark,
+            report.status,
+            p.reset,
+            report.task_id,
+            report.attempts,
+            plural(report.attempts as usize),
+            report.impacted_tests.len(),
+            plural(report.impacted_tests.len()),
+        );
+    }
+    println!();
+    if failures > 0 {
+        return ExitCode::FAILURE;
+    }
+    ExitCode::SUCCESS
+}
+
 fn main() -> ExitCode {
     let cli = Cli::parse();
     match &cli.command {
@@ -671,6 +780,18 @@ fn main() -> ExitCode {
             mcp,
         }) => return run_serve(&cli.path, policy, leases, *mcp),
         Some(Command::Init { force }) => return run_init(&cli.path, *force),
+        Some(Command::Orchestrate {
+            ledger,
+            actor,
+            executor,
+            policy,
+            leases,
+            max_retries,
+        }) => {
+            return run_orchestrate(
+                &cli.path, ledger, actor, executor, policy, leases, *max_retries,
+            )
+        }
         None => {}
     }
     let result = match scan(&ScanOptions {
