@@ -2,7 +2,8 @@ use oxc_ast::ast::{
     ArrowFunctionExpression, AssignmentExpression, BinaryExpression, CallExpression, Class,
     ConditionalExpression, Function, IfStatement, ImportDeclaration, ImportExpression,
     NewExpression, ReturnStatement, Statement, StaticMemberExpression, SwitchStatement,
-    TaggedTemplateExpression, ThrowStatement, TryStatement, VariableDeclaration, YieldExpression,
+    TSInterfaceDeclaration, TaggedTemplateExpression, ThrowStatement, TryStatement,
+    VariableDeclaration, YieldExpression,
 };
 use oxc_span::Span;
 
@@ -34,6 +35,7 @@ mod no_try_catch_in_gen;
 mod no_unbounded_concurrency;
 mod no_unnecessary_fail;
 mod no_unnecessary_gen;
+mod oop_to_effect;
 mod prefer_clock_service;
 mod prefer_effect_fn;
 mod prefer_effect_logging;
@@ -76,6 +78,13 @@ pub struct Scratch {
     /// Spans of `else if` links already covered by a reported chain head, so
     /// the agent if/else rule reports each chain exactly once.
     pub if_chain_skip: Vec<u32>,
+    /// Single-method interfaces seen in this file `(name, span)` — the Strategy
+    /// rule cross-references these against [`Self::implemented_interfaces`] at
+    /// file end (a single-method interface with ≥2 implementers is a Strategy).
+    pub single_method_interfaces: Vec<(String, Span)>,
+    /// Interface names appearing in class `implements` clauses (one entry per
+    /// occurrence, so duplicates count implementers).
+    pub implemented_interfaces: Vec<String>,
 }
 
 /// Per-file context handed to rules: import provenance, the function-frame
@@ -186,6 +195,7 @@ pub trait Rule: Sync {
     fn on_try(&self, _try_stmt: &TryStatement<'_>, _ctx: &mut FileCtx) {}
     fn on_throw(&self, _throw_stmt: &ThrowStatement<'_>, _ctx: &mut FileCtx) {}
     fn on_class(&self, _class: &Class<'_>, _ctx: &mut FileCtx) {}
+    fn on_interface(&self, _interface: &TSInterfaceDeclaration<'_>, _ctx: &mut FileCtx) {}
     fn on_import(&self, _import: &ImportDeclaration<'_>, _ctx: &mut FileCtx) {}
     fn on_tagged_template(&self, _template: &TaggedTemplateExpression<'_>, _ctx: &mut FileCtx) {}
     fn on_function(&self, _function: &Function<'_>, _ctx: &mut FileCtx) {}
@@ -256,4 +266,10 @@ pub static RULES: &[&(dyn Rule + Send + Sync)] = &[
     &adopt::Adopt,
     // agent hygiene (experimental, --agent)
     &agent_hygiene::AgentHygiene,
+    // OOP → Effect (experimental, --agent): hand-rolled design patterns Effect replaces
+    &oop_to_effect::Singleton,
+    &oop_to_effect::Observer,
+    &oop_to_effect::Strategy,
+    &oop_to_effect::Visitor,
+    &oop_to_effect::ChainOfResponsibility,
 ];

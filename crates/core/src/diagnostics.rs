@@ -35,6 +35,10 @@ pub enum Category {
     /// React findings merged from react-doctor (its full rule set, run
     /// automatically when a React project is detected).
     React,
+    /// `--agent`: hand-rolled OOP design patterns (Singleton, Observer, Strategy,
+    /// Visitor, Chain of Responsibility) that Effect replaces with a first-class
+    /// primitive (Layer, PubSub, a function, Match, combinator composition).
+    OopToEffect,
 }
 
 impl Category {
@@ -49,6 +53,7 @@ impl Category {
             Category::Adoption => "Effect Adoption",
             Category::AgentHygiene => "Agent hygiene",
             Category::React => "React",
+            Category::OopToEffect => "OOP → Effect",
         }
     }
 }

@@ -420,6 +420,27 @@ pub fn example_for(rule: &str) -> Option<RuleExample> {
             "// both take (id) and call getUser + decode + log — same job, two routes\nexport const loadUser = (id) => { ... }\nexport const fetchUser = (id) => { ... }",
             "// keep one; derive the other or delete it\nexport const loadUser = (id) => Effect.gen(function* () { ... })\nexport const fetchUser = loadUser",
         ),
+        // ─── OOP → Effect ───
+        "oop-singleton-to-layer" => (
+            "class Db {\n  private static instance: Db\n  private constructor() {}\n  static getInstance() {\n    if (!Db.instance) Db.instance = new Db()\n    return Db.instance\n  }\n}",
+            "class Db extends Effect.Service<Db>()(\"Db\", {\n  effect: Effect.gen(function* () { /* open pool */ return {} as DbApi })\n}) {}\n// inject Db.Default as a Layer; no global mutable singleton",
+        ),
+        "oop-observer-to-pubsub" => (
+            "class Emitter {\n  private listeners: ((e: Event) => void)[] = []\n  subscribe(fn: (e: Event) => void) { this.listeners.push(fn) }\n  notify(e: Event) { for (const fn of this.listeners) fn(e) }\n}",
+            "const hub = yield* PubSub.unbounded<Event>()\n// publish: yield* PubSub.publish(hub, event)\n// subscribe: Stream.fromPubSub(hub).pipe(Stream.runForEach(handle))",
+        ),
+        "oop-strategy-to-function" => (
+            "interface Discount { apply(total: number): number }\nclass NoDiscount implements Discount { apply(t: number) { return t } }\nclass HalfOff implements Discount { apply(t: number) { return t / 2 } }",
+            "type Discount = (total: number) => number\nconst noDiscount: Discount = (t) => t\nconst halfOff: Discount = (t) => t / 2\n// pass the function where the strategy is needed",
+        ),
+        "oop-visitor-to-match" => (
+            "class AreaVisitor {\n  visitCircle(c: Circle) { return Math.PI * c.r ** 2 }\n  visitSquare(s: Square) { return s.side ** 2 }\n}",
+            "type Shape = Circle | Square // each with a _tag\nconst area = (shape: Shape) => Match.value(shape).pipe(\n  Match.tag(\"Circle\", (c) => Math.PI * c.r ** 2),\n  Match.tag(\"Square\", (s) => s.side ** 2),\n  Match.exhaustive\n)",
+        ),
+        "oop-chain-to-catchtag" => (
+            "class AuthHandler {\n  next?: AuthHandler\n  setNext(h: AuthHandler) { this.next = h }\n  handle(req: Req) { return this.can(req) ? this.run(req) : this.next?.handle(req) }\n}",
+            "const handle = (req: Req) =>\n  authStep(req).pipe(\n    Effect.catchTag(\"Unauthorized\", () => rateLimitStep(req)),\n    Effect.orElse(() => fallbackStep(req))\n  )",
+        ),
         "agent-max-file-length" => (
             "// services.ts — 900 lines: HTTP client, parsing, caching, retries, types\nexport const fetchUser = ...\nexport const parseUser = ...\nexport const cacheLayer = ...\n// ...and 880 more lines",
             "// split by responsibility, one purpose per module\n// http.ts  — export const fetchUser = ...\n// codec.ts — export const parseUser = ...\n// cache.ts — export const cacheLayer = ...",

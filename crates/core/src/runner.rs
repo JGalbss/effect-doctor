@@ -4,8 +4,9 @@ use oxc_ast::ast::{
     ArrowFunctionExpression, AssignmentExpression, BinaryExpression, CallExpression, Class,
     ConditionalExpression, DoWhileStatement, Expression, ForInStatement, ForOfStatement,
     ForStatement, Function, IfStatement, ImportDeclaration, ImportExpression, NewExpression,
-    Program, ReturnStatement, StaticMemberExpression, SwitchStatement, TaggedTemplateExpression,
-    ThrowStatement, TryStatement, VariableDeclaration, WhileStatement, YieldExpression,
+    Program, ReturnStatement, StaticMemberExpression, SwitchStatement, TSInterfaceDeclaration,
+    TaggedTemplateExpression, ThrowStatement, TryStatement, VariableDeclaration, WhileStatement,
+    YieldExpression,
 };
 use oxc_ast_visit::{walk, Visit};
 use oxc_syntax::scope::ScopeFlags;
@@ -217,6 +218,13 @@ impl<'a> Visit<'a> for Runner {
             rule.on_class(class, &mut self.ctx);
         }
         walk::walk_class(self, class);
+    }
+
+    fn visit_ts_interface_declaration(&mut self, interface: &TSInterfaceDeclaration<'a>) {
+        for rule in self.rules() {
+            rule.on_interface(interface, &mut self.ctx);
+        }
+        walk::walk_ts_interface_declaration(self, interface);
     }
 
     fn visit_import_declaration(&mut self, import: &ImportDeclaration<'a>) {

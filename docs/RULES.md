@@ -172,6 +172,22 @@ location to reuse). All `info` — never scored. `project` detectability: needs 
 | `agent-similar-function-name` | info | project | same (non-generic) name defined in another file → likely a duplicate implementation |
 | `agent-similar-shape` | info | project | same param count + call set as another function → may accomplish the same goal another way |
 
+## OOP → Effect (experimental, `--agent`)
+
+Hand-rolled Gang-of-Four design patterns that Effect (or plain functional TS) replaces with a
+first-class primitive. Each matches a distinctive structural signature (low false-positive
+risk) and points at the idiomatic rewrite. Opt-in under `--agent`; `--agent-strict` escalates
+to `error`. Class/interface detectability is AST-only (the Strategy rule aggregates interface +
+`implements` at file end).
+
+| id | sev | det | summary |
+|---|---|---|---|
+| `oop-singleton-to-layer` | warn | AST | `private static instance` + `static getInstance()` → `Context.Tag`/`Effect.Service` + `Layer` |
+| `oop-observer-to-pubsub` | warn | AST | listener-array field + `subscribe`/`notify` → `PubSub` / `Stream` / `SubscriptionRef` |
+| `oop-strategy-to-function` | warn | file | single-method interface with ≥2 implementers → a function type (pass the function) |
+| `oop-visitor-to-match` | warn | AST | ≥2 `visitX` double-dispatch methods → tagged union + `Match.exhaustive` |
+| `oop-chain-to-catchtag` | warn | AST | `next` link + `handle`/`setNext` → `Effect.orElse`/`catchTag` chain or middleware pipeline |
+
 ## React tier (`rd/*`, auto-detected)
 
 When a `react` dependency is present in package.json, agent-doctor runs
