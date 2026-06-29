@@ -1,9 +1,9 @@
 use oxc_ast::ast::{
     ArrowFunctionExpression, AssignmentExpression, BinaryExpression, CallExpression, Class,
-    ConditionalExpression, Function, IfStatement, ImportDeclaration, ImportExpression,
-    NewExpression, ReturnStatement, Statement, StaticMemberExpression, SwitchStatement,
-    TSInterfaceDeclaration, TaggedTemplateExpression, ThrowStatement, TryStatement,
-    VariableDeclaration, YieldExpression,
+    ConditionalExpression, ExportDefaultDeclaration, Function, IfStatement, ImportDeclaration,
+    ImportExpression, NewExpression, ReturnStatement, Statement, StaticMemberExpression,
+    SwitchStatement, TSAsExpression, TSInterfaceDeclaration, TSNonNullExpression, TSType,
+    TaggedTemplateExpression, ThrowStatement, TryStatement, VariableDeclaration, YieldExpression,
 };
 use oxc_span::Span;
 
@@ -17,6 +17,7 @@ mod composition_limits;
 mod concurrency_idioms;
 mod equality_idioms;
 mod error_modeling;
+mod function_metrics;
 mod gen_shape;
 mod globals_in_effect;
 mod idiom_shortcuts;
@@ -25,6 +26,7 @@ mod literal_idioms;
 mod logging_security;
 mod map_misuse;
 mod meaningful_span_names;
+mod module_conventions;
 mod no_chained_provides;
 mod no_effect_do;
 mod no_manual_sql_transactions;
@@ -51,6 +53,7 @@ mod schedule_hygiene;
 mod schema_class_hygiene;
 mod schema_usage;
 mod stream_hygiene;
+pub(crate) mod ts_safety;
 mod v4_imports;
 mod v4_no_gen_adapter;
 mod v4_renames;
@@ -196,6 +199,10 @@ pub trait Rule: Sync {
     fn on_throw(&self, _throw_stmt: &ThrowStatement<'_>, _ctx: &mut FileCtx) {}
     fn on_class(&self, _class: &Class<'_>, _ctx: &mut FileCtx) {}
     fn on_interface(&self, _interface: &TSInterfaceDeclaration<'_>, _ctx: &mut FileCtx) {}
+    fn on_ts_type(&self, _ts_type: &TSType<'_>, _ctx: &mut FileCtx) {}
+    fn on_ts_as(&self, _as_expr: &TSAsExpression<'_>, _ctx: &mut FileCtx) {}
+    fn on_ts_non_null(&self, _non_null: &TSNonNullExpression<'_>, _ctx: &mut FileCtx) {}
+    fn on_export_default(&self, _export: &ExportDefaultDeclaration<'_>, _ctx: &mut FileCtx) {}
     fn on_import(&self, _import: &ImportDeclaration<'_>, _ctx: &mut FileCtx) {}
     fn on_tagged_template(&self, _template: &TaggedTemplateExpression<'_>, _ctx: &mut FileCtx) {}
     fn on_function(&self, _function: &Function<'_>, _ctx: &mut FileCtx) {}
@@ -212,6 +219,7 @@ pub fn all_metas() -> Vec<&'static RuleMeta> {
         .flat_map(|rule| rule.metas().iter().copied())
         .chain(crate::fn_index::cross_file_metas().iter().copied())
         .chain(crate::file_length::file_length_metas().iter().copied())
+        .chain(ts_safety::comment_metas().iter().copied())
         .collect()
 }
 
@@ -272,4 +280,13 @@ pub static RULES: &[&(dyn Rule + Send + Sync)] = &[
     &oop_to_effect::Strategy,
     &oop_to_effect::Visitor,
     &oop_to_effect::ChainOfResponsibility,
+    // type safety (always-on): escape hatches that defeat the type checker
+    &ts_safety::NoExplicitAny,
+    &ts_safety::NoNonNullAssertion,
+    &ts_safety::NoUnsafeDoubleCast,
+    &ts_safety::NoEmptyCatch,
+    // maintainability metrics (always-on)
+    &function_metrics::FunctionMetrics,
+    // module conventions (experimental, --agent)
+    &module_conventions::NoDefaultExport,
 ];

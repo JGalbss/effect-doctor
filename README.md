@@ -23,7 +23,7 @@ agent-doctor <dir>                      # scan everything
 agent-doctor <dir> --verbose --json     # full report / machine-readable
 agent-doctor --scope changed            # only files changed vs main (PR mode)
 agent-doctor --scope lines --base main  # only issues on lines you touched
-agent-doctor rules                      # list all 107 rules
+agent-doctor rules                      # list all 116 rules
 agent-doctor explain no-map-returning-effect   # why + how to rewrite it
 agent-doctor rules --json               # full catalog with rewrite recipes
 agent-doctor --deep                     # merge type-aware @effect/language-service findings
@@ -59,7 +59,7 @@ rewrites, search, and category filters. `npm run gen` regenerates its data from
 
 ## Status
 
-Early but real: **107 rules live** across correctness, idiomatic, architecture,
+Early but real: **116 rules live** across correctness, idiomatic, architecture,
 performance, and v4-migration categories — every rule ships with a bad→good rewrite
 recipe (`explain`), and 120+ integration tests cover the catalog (bad patterns fire,
 clean code stays silent; example coverage is test-enforced). Rule sources: the Effect-TS
@@ -100,6 +100,10 @@ is in [docs/RULES.md](docs/RULES.md); architecture and roadmap in
   with a first-class primitive — Singleton → `Context.Tag`/`Layer`, Observer → `PubSub`/`Stream`,
   Strategy (single-method interface, ≥2 impls) → a function type, Visitor → `Match.exhaustive`,
   Chain of Responsibility → `Effect.orElse`/`catchTag` — each with the idiomatic rewrite.
+- Type safety (always-on): flags the escape hatches agents use to silence the compiler —
+  `any`, non-null `!`, double-casts (`as unknown as`), empty `catch {}`, `@ts-ignore` —
+  plus per-function maintainability metrics (too many parameters, deep nesting, high cognitive
+  complexity). All `warn`; `--agent-strict` escalates them to a hard CI gate.
 - Planned: suppression comments, config file, editor extension packaging, agent
   handoff, npm distribution as per-platform binaries.
 

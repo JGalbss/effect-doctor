@@ -188,6 +188,37 @@ to `error`. Class/interface detectability is AST-only (the Strategy rule aggrega
 | `oop-visitor-to-match` | warn | AST | ≥2 `visitX` double-dispatch methods → tagged union + `Match.exhaustive` |
 | `oop-chain-to-catchtag` | warn | AST | `next` link + `handle`/`setNext` → `Effect.orElse`/`catchTag` chain or middleware pipeline |
 
+## Type safety (always-on)
+
+Escape hatches that defeat the type checker — the moves agents reach for to silence a red
+squiggle. Always-on (every scanned file), `warn`; `--agent-strict` escalates them to `error`
+for a CI gate.
+
+| id | sev | det | summary |
+|---|---|---|---|
+| `no-explicit-any` | warn | AST | `any` annotation → `unknown` + Schema decode, a generic, or the precise type |
+| `no-non-null-assertion` | warn | AST | `x!` → narrow with a guard, optional chaining, or `Option` |
+| `no-unsafe-double-cast` | warn | AST | `x as Y as Z` / `as unknown as` → decode/validate with `Schema` |
+| `no-empty-catch` | warn | AST | empty `catch {}` swallows failures → handle or model as a typed error |
+| `no-ts-ignore` | warn | comment | `@ts-ignore` / `@ts-expect-error` → fix the underlying type error |
+
+## Maintainability (always-on)
+
+Per-function metrics that turn the score into a real maintainability grade. Always-on `warn`;
+`--agent-strict` escalates.
+
+| id | sev | det | summary |
+|---|---|---|---|
+| `max-function-parameters` | warn | AST | more than 4 parameters → group into an options object / `Data` struct |
+| `max-nesting-depth` | warn | AST | control-flow nesting deeper than 4 → early returns, extracted helpers, `Match` |
+| `high-cognitive-complexity` | warn | AST | SonarJS cognitive complexity > 15 → split the function / flatten branching |
+
+## Module conventions (experimental, `--agent`)
+
+| id | sev | det | summary |
+|---|---|---|---|
+| `agent-no-default-export` | warn | AST | `export default` → named export (stable identity, refactor-friendly) |
+
 ## React tier (`rd/*`, auto-detected)
 
 When a `react` dependency is present in package.json, agent-doctor runs

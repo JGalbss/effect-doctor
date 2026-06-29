@@ -4,9 +4,9 @@ use oxc_ast::ast::{
     ArrowFunctionExpression, AssignmentExpression, BinaryExpression, CallExpression, Class,
     ConditionalExpression, DoWhileStatement, Expression, ForInStatement, ForOfStatement,
     ForStatement, Function, IfStatement, ImportDeclaration, ImportExpression, NewExpression,
-    Program, ReturnStatement, StaticMemberExpression, SwitchStatement, TSInterfaceDeclaration,
-    TaggedTemplateExpression, ThrowStatement, TryStatement, VariableDeclaration, WhileStatement,
-    YieldExpression,
+    ExportDefaultDeclaration, Program, ReturnStatement, StaticMemberExpression, SwitchStatement,
+    TSAsExpression, TSInterfaceDeclaration, TSNonNullExpression, TSType, TaggedTemplateExpression,
+    ThrowStatement, TryStatement, VariableDeclaration, WhileStatement, YieldExpression,
 };
 use oxc_ast_visit::{walk, Visit};
 use oxc_syntax::scope::ScopeFlags;
@@ -225,6 +225,34 @@ impl<'a> Visit<'a> for Runner {
             rule.on_interface(interface, &mut self.ctx);
         }
         walk::walk_ts_interface_declaration(self, interface);
+    }
+
+    fn visit_ts_type(&mut self, ts_type: &TSType<'a>) {
+        for rule in self.rules() {
+            rule.on_ts_type(ts_type, &mut self.ctx);
+        }
+        walk::walk_ts_type(self, ts_type);
+    }
+
+    fn visit_ts_as_expression(&mut self, as_expr: &TSAsExpression<'a>) {
+        for rule in self.rules() {
+            rule.on_ts_as(as_expr, &mut self.ctx);
+        }
+        walk::walk_ts_as_expression(self, as_expr);
+    }
+
+    fn visit_ts_non_null_expression(&mut self, non_null: &TSNonNullExpression<'a>) {
+        for rule in self.rules() {
+            rule.on_ts_non_null(non_null, &mut self.ctx);
+        }
+        walk::walk_ts_non_null_expression(self, non_null);
+    }
+
+    fn visit_export_default_declaration(&mut self, export: &ExportDefaultDeclaration<'a>) {
+        for rule in self.rules() {
+            rule.on_export_default(export, &mut self.ctx);
+        }
+        walk::walk_export_default_declaration(self, export);
     }
 
     fn visit_import_declaration(&mut self, import: &ImportDeclaration<'a>) {

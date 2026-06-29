@@ -117,7 +117,7 @@ pub(crate) fn analyze_source(
         true => fn_index::collect_from_program(&parsed.program, source, display_path),
         false => Vec::new(),
     };
-    let ctx = Runner::new(
+    let mut ctx = Runner::new(
         imports,
         options.v4_active,
         options.adopt,
@@ -125,6 +125,10 @@ pub(crate) fn analyze_source(
         options.agent_strict,
     )
     .run(&parsed.program);
+    // `@ts-ignore` / `@ts-expect-error` live in comments, not the AST — scan them
+    // from the parsed comment list and fold the findings into the file's set.
+    ctx.raw
+        .extend(crate::rules::ts_safety::ts_ignore_findings(&parsed.program, source));
     let diagnostics = finalize(source, display_path, classify_file(display_path), ctx.raw);
     FileAnalysis {
         diagnostics,

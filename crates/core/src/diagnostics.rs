@@ -39,6 +39,12 @@ pub enum Category {
     /// Visitor, Chain of Responsibility) that Effect replaces with a first-class
     /// primitive (Layer, PubSub, a function, Match, combinator composition).
     OopToEffect,
+    /// TypeScript escape hatches that defeat the type checker (`any`, `!`,
+    /// double-casts, `@ts-ignore`) and other unsafe-by-default code.
+    TypeSafety,
+    /// Maintainability metrics — oversized functions, too many parameters, deep
+    /// nesting, high cognitive complexity.
+    Maintainability,
 }
 
 impl Category {
@@ -54,6 +60,8 @@ impl Category {
             Category::AgentHygiene => "Agent hygiene",
             Category::React => "React",
             Category::OopToEffect => "OOP → Effect",
+            Category::TypeSafety => "Type safety",
+            Category::Maintainability => "Maintainability",
         }
     }
 }

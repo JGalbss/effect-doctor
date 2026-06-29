@@ -441,6 +441,45 @@ pub fn example_for(rule: &str) -> Option<RuleExample> {
             "class AuthHandler {\n  next?: AuthHandler\n  setNext(h: AuthHandler) { this.next = h }\n  handle(req: Req) { return this.can(req) ? this.run(req) : this.next?.handle(req) }\n}",
             "const handle = (req: Req) =>\n  authStep(req).pipe(\n    Effect.catchTag(\"Unauthorized\", () => rateLimitStep(req)),\n    Effect.orElse(() => fallbackStep(req))\n  )",
         ),
+        // ─── type safety ───
+        "no-explicit-any" => (
+            "function parse(input: any): any {\n  return input.data\n}",
+            "function parse(input: unknown): ParsedData {\n  return Schema.decodeUnknownSync(ParsedData)(input)\n}",
+        ),
+        "no-non-null-assertion" => (
+            "const user = users.find((u) => u.id === id)!\nreturn user.name",
+            "const user = users.find((u) => u.id === id)\nif (!user) return yield* new UserNotFound({ id })\nreturn user.name",
+        ),
+        "no-unsafe-double-cast" => (
+            "const config = rawJson as unknown as Config",
+            "const config = Schema.decodeUnknownSync(Config)(rawJson)",
+        ),
+        "no-empty-catch" => (
+            "try {\n  return JSON.parse(raw)\n} catch {}",
+            "Effect.try({\n  try: () => JSON.parse(raw),\n  catch: (cause) => new ParseError({ cause })\n})",
+        ),
+        "no-ts-ignore" => (
+            "// @ts-ignore\nconst total = widget.price * qty",
+            "const total = widget.price * qty // fix the type of `widget` instead\n// if truly unavoidable: // @ts-expect-error <reason>",
+        ),
+        // ─── maintainability ───
+        "max-function-parameters" => (
+            "function createUser(name: string, email: string, age: number, role: string, active: boolean) {}",
+            "interface CreateUser { name: string; email: string; age: number; role: string; active: boolean }\nfunction createUser(input: CreateUser) {}",
+        ),
+        "max-nesting-depth" => (
+            "for (const o of orders) {\n  if (o.paid) {\n    if (o.items.length) {\n      for (const i of o.items) {\n        if (i.inStock) ship(i)\n      }\n    }\n  }\n}",
+            "const shippable = orders.flatMap((o) =>\n  o.paid ? o.items.filter((i) => i.inStock) : []\n)\nyield* Effect.forEach(shippable, ship)",
+        ),
+        "high-cognitive-complexity" => (
+            "// one function with many nested branches and && / || conditions\nfunction price(o) { if (a) { if (b && c) { ... } else if (d) { ... } } ... }",
+            "// split into named steps and replace branching with Match / lookup maps\nconst price = (o: Order) => Match.value(o).pipe(Match.when(..., ...), Match.orElse(...))",
+        ),
+        // ─── module conventions ───
+        "agent-no-default-export" => (
+            "export default function Button() { return null }",
+            "export function Button() { return null }",
+        ),
         "agent-max-file-length" => (
             "// services.ts — 900 lines: HTTP client, parsing, caching, retries, types\nexport const fetchUser = ...\nexport const parseUser = ...\nexport const cacheLayer = ...\n// ...and 880 more lines",
             "// split by responsibility, one purpose per module\n// http.ts  — export const fetchUser = ...\n// codec.ts — export const parseUser = ...\n// cache.ts — export const cacheLayer = ...",
